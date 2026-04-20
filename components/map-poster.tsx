@@ -53,6 +53,7 @@ const MapPoster = () => {
   const [showAeroway, setShowAeroway] = useState(true);
   const [showLabels, setShowLabels] = useState(false);
   const [distance, setDistance] = useState(4000);
+  const [cornerRadius, setCornerRadius] = useState(0);
   const [markers, setMarkers] = useState<{ id: string, name: string, coords: [number, number] }[]>([]);
 
   const fontOptions = [
@@ -183,6 +184,7 @@ const MapPoster = () => {
     { id: 'pinterest', category: 'SOCIAL MEDIA', name: 'PINTEREST PIN', dims: '1000 x 1500 PX', aspect: 1000 / 1500 },
     { id: 'desktop', category: 'DIGITAL', name: 'DESKTOP WALLPAPER', dims: '1920 x 1080 PX', aspect: 1920 / 1080 },
     { id: 'phone', category: 'DIGITAL', name: 'PHONE WALLPAPER', dims: '1170 x 2532 PX', aspect: 1170 / 2532 },
+    { id: 'perfect-circle', category: 'SHAPES', name: 'PERFECT CIRCLE', dims: 'CIRCULAR', aspect: 1, isCircular: true },
   ];
 
   const [selectedLayoutId, setSelectedLayoutId] = useState('a4-portrait');
@@ -607,7 +609,7 @@ const MapPoster = () => {
         dataUrl = await toPng(posterRef.current, {
           pixelRatio: 2,
           cacheBust: true,
-          backgroundColor: currentColors['Land'] || '#000',
+          // backgroundColor removed for transparency
           filter: (node: Element) => {
             if (node === mapCanvasEl) return false;
             if (node.tagName === 'LINK' && (node as HTMLLinkElement).rel === 'stylesheet') {
@@ -620,7 +622,7 @@ const MapPoster = () => {
         dataUrl = await toPng(posterRef.current, {
           pixelRatio: 1,
           cacheBust: true,
-          backgroundColor: currentColors['Land'] || '#000',
+          // backgroundColor removed for transparency
           filter: (node: Element) => node !== mapCanvasEl,
         });
       }
@@ -799,8 +801,9 @@ const MapPoster = () => {
                       <div className="flex items-center justify-between mb-2">
                         <h2 className="text-sm font-bold tracking-[0.1em] text-white uppercase">THEME: {selectedTheme.name}</h2>
                         <button
-                          onClick={() => setIsEditorOpen(true)}
+                          onClick={() => setIsEditorOpen(!isEditorOpen)}
                           className="p-2 bg-white/5 hover:bg-white/10 rounded-lg text-white transition-colors"
+                          title={isEditorOpen ? "Close color editor" : "Open color editor"}
                         >
                           <Brush className="w-4 h-4" />
                         </button>
@@ -912,9 +915,9 @@ const MapPoster = () => {
                   <div className="flex items-center justify-between mb-2">
                     <h2 className="text-sm font-bold tracking-[0.1em] text-white uppercase">LAYOUT: {selectedLayout.name}</h2>
                     <button
-                      onClick={() => setIsLayoutEditorOpen(true)}
+                      onClick={() => setIsLayoutEditorOpen(!isLayoutEditorOpen)}
                       className="p-2 bg-white/5 hover:bg-white/10 rounded-lg text-white transition-colors border border-white/10"
-                      title="Open aspect ratio editor"
+                      title={isLayoutEditorOpen ? "Close aspect ratio editor" : "Open aspect ratio editor"}
                     >
                       <Brush className="w-4 h-4" />
                     </button>
@@ -1027,7 +1030,7 @@ const MapPoster = () => {
                 </div>
 
                 <div className="flex-1 overflow-y-auto px-6 py-6 space-y-8 custom-scrollbar">
-                  {['PRINT', 'SOCIAL MEDIA', 'DIGITAL'].map((cat) => (
+                  {['PRINT', 'SOCIAL MEDIA', 'DIGITAL', 'SHAPES'].map((cat) => (
                     <div key={cat} className="space-y-4">
                       <h3 className="text-[10px] font-black tracking-[0.2em] text-muted-foreground uppercase">{cat}</h3>
                       <div className="grid grid-cols-2 gap-3">
@@ -1049,8 +1052,7 @@ const MapPoster = () => {
 
                             <div className="mt-auto flex items-center justify-center h-20 w-full bg-[#1a1f2b] rounded-lg border border-white/5 overflow-hidden">
                               <div
-                                className={`bg-primary/30 border border-primary/20 rounded-sm shadow-sm transition-all duration-300 ${layout.aspect > 1 ? 'w-[70%] h-[40%]' : 'w-[40%] h-[70%]'
-                                  }`}
+                                className={`bg-primary/30 border border-primary/20 shadow-sm transition-all duration-300 ${layout.aspect > 1 ? 'w-[70%] h-[40%]' : 'w-[40%] h-[70%]'} ${(layout as any).isCircular ? 'rounded-full' : 'rounded-sm'}`}
                                 style={{ aspectRatio: layout.aspect }}
                               />
                             </div>
@@ -1097,6 +1099,46 @@ const MapPoster = () => {
                       <div className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow-md transition-transform duration-300 ${showOverlay ? 'translate-x-6' : 'translate-x-0.5'
                         }`} />
                     </button>
+                  </div>
+                  
+                  {/* Corner Rounding Control */}
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-[10px] font-black tracking-[0.2em] text-primary uppercase">CORNER ROUNDING</h3>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] font-mono text-muted-foreground bg-white/5 px-1.5 py-0.5 rounded border border-white/5">
+                          {(selectedLayout as any).isCircular ? 'CIRCLE' : `${cornerRadius}PX`}
+                        </span>
+                        <button
+                          onClick={() => setCornerRadius(8)}
+                          className="p-1 px-2 text-[8px] font-bold tracking-widest text-muted-foreground hover:text-white uppercase border border-white/5 bg-white/5 rounded transition-all"
+                        >
+                          Reset
+                        </button>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-4">
+                      <input
+                        type="range"
+                        min="0"
+                        max="500"
+                        step="1"
+                        value={(selectedLayout as any).isCircular ? 500 : cornerRadius}
+                        disabled={(selectedLayout as any).isCircular}
+                        onChange={(e) => setCornerRadius(parseInt(e.target.value))}
+                        className={`flex-1 h-1.5 bg-white/10 rounded-full appearance-none cursor-pointer accent-primary ${
+                          (selectedLayout as any).isCircular ? 'opacity-30 cursor-not-allowed' : ''
+                        }`}
+                        style={{
+                          background: `linear-gradient(to right, var(--primary) 0%, var(--primary) ${(( (selectedLayout as any).isCircular ? 500 : cornerRadius) / 500) * 100}%, rgba(255,255,255,0.1) ${(( (selectedLayout as any).isCircular ? 500 : cornerRadius) / 500) * 100}%, rgba(255,255,255,0.1) 100%)`
+                        }}
+                      />
+                    </div>
+                    <p className="text-[10px] text-muted-foreground/60 leading-relaxed uppercase">
+                      {(selectedLayout as any).isCircular 
+                        ? 'Rounding is fixed for circular layouts.' 
+                        : 'Adjust the sharpness or roundness of the poster edges.'}
+                    </p>
                   </div>
 
                   {/* Editable City & Country */}
@@ -1490,11 +1532,12 @@ const MapPoster = () => {
           <div className="z-20 flex flex-col items-center gap-6 pb-12 w-full max-w-full overflow-hidden px-4">
             <div
               ref={posterRef}
-              className="relative shadow-[0_0_50px_rgba(0,0,0,0.5)] border overflow-hidden rounded-sm ring-1 ring-white/10 flex flex-col pointer-events-auto shrink transition-all duration-500 mx-auto"
+              className={`relative shadow-[0_0_50px_rgba(0,0,0,0.5)] border overflow-hidden ring-1 ring-white/10 flex flex-col pointer-events-auto shrink transition-all duration-500 mx-auto`}
               style={{
                 backgroundColor: currentColors['Land'],
                 borderColor: currentColors['Road Outline'],
                 aspectRatio: currentLayoutAspect,
+                borderRadius: (selectedLayout as any).isCircular ? '50%' : `${cornerRadius}px`,
                 width: `min(90vw, calc(70vh * ${currentLayoutAspect}))`,
                 maxWidth: '100%',
                 maxHeight: '70vh',
