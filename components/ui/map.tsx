@@ -140,6 +140,10 @@ type MapProps = {
    * to enable controlled mode where the map viewport is driven by your state.
    */
   onViewportChange?: (viewport: MapViewport) => void;
+  /**
+   * Callback fired once when the map movement stops.
+   */
+  onMoveEnd?: (viewport: MapViewport) => void;
   /** Show a loading indicator on the map */
   loading?: boolean;
   /** Enable preserveDrawingBuffer for screenshot/export support */
@@ -185,6 +189,7 @@ const Map = forwardRef<MapRef, MapProps>(function Map(
     projection,
     viewport,
     onViewportChange,
+    onMoveEnd,
     loading = false,
     ...props
   },
@@ -202,7 +207,9 @@ const Map = forwardRef<MapRef, MapProps>(function Map(
   const isControlled = viewport !== undefined && onViewportChange !== undefined;
 
   const onViewportChangeRef = useRef(onViewportChange);
+  const onMoveEndRef = useRef(onMoveEnd);
   onViewportChangeRef.current = onViewportChange;
+  onMoveEndRef.current = onMoveEnd;
 
   const mapStyles = useMemo(
     () => ({
@@ -266,9 +273,15 @@ const Map = forwardRef<MapRef, MapProps>(function Map(
       onViewportChangeRef.current?.(getViewport(map));
     };
 
-    map.on("load", loadHandler);
+    const handleMoveEnd = () => {
+      if (internalUpdateRef.current) return;
+      onMoveEndRef.current?.(getViewport(map));
+    };
+
+      map.on("load", loadHandler);
     map.on("styledata", styleDataHandler);
     map.on("move", handleMove);
+    map.on("moveend", handleMoveEnd);
     setMapInstance(map);
 
     return () => {
@@ -276,6 +289,7 @@ const Map = forwardRef<MapRef, MapProps>(function Map(
       map.off("load", loadHandler);
       map.off("styledata", styleDataHandler);
       map.off("move", handleMove);
+      map.off("moveend", handleMoveEnd);
       map.remove();
       setIsLoaded(false);
       setIsStyleLoaded(false);

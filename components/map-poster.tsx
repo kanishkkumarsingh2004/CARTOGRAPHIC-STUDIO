@@ -353,37 +353,26 @@ const MapPoster = () => {
     showParks, showRoads, showRail, showAeroway, showLabels, mapRef, bgMapRef, detailLevel, isMounted
   ]);
 
-  useEffect(() => {
-    if (!mapRef.current) return;
-    const map = mapRef.current;
+  const handleMapMoveEnd = async (viewport: { center: [number, number]; zoom: number; bearing: number; pitch: number }) => {
+    const { center, zoom: newZoom } = viewport;
 
-    const handleMoveEnd = async () => {
-      const newZoom = map.getZoom();
-      const center = map.getCenter();
+    setZoom(newZoom);
+    setMapCenter(center);
 
-      setZoom(newZoom);
-      setMapCenter([center.lng, center.lat]);
+    // Sync zoom back to distance: distance = 2^ (24.5 - zoom)
+    const newDistance = Math.round(Math.pow(2, 24.5 - newZoom));
+    setDistance(newDistance);
 
-      // Sync zoom back to distance: distance = 2^ (24.5 - zoom)
-      const newDistance = Math.round(Math.pow(2, 24.5 - newZoom));
-      setDistance(newDistance);
-
-      if (isTextManual) return;
-      try {
-        const addr = await reverseGeocode(center.lat, center.lng);
-        if (addr) {
-          const place = addr.city || addr.suburb || addr.county || 'LOCATION';
-          setLocName(place.toUpperCase());
-          setLocCountry(addr.country.toUpperCase() || 'EARTH');
-        }
-      } catch (err) { }
-    };
-
-    map.on('moveend', handleMoveEnd);
-    return () => {
-      map.off('moveend', handleMoveEnd);
-    };
-  }, [mapRef, isTextManual]);
+    if (isTextManual) return;
+    try {
+      const addr = await reverseGeocode(center[1], center[0]);
+      if (addr) {
+        const place = addr.city || addr.suburb || addr.county || 'LOCATION';
+        setLocName(place.toUpperCase());
+        setLocCountry(addr.country.toUpperCase() || 'EARTH');
+      }
+    } catch (err) { }
+  };
 
   // Sync background map position
   useEffect(() => {
@@ -632,7 +621,7 @@ const MapPoster = () => {
         </button>
       </header>
 
-      <div className="flex flex-1 relative overflow-hidden bg-[#050810]">
+      <div className="flex flex-1 relative min-h-0 overflow-hidden bg-[#050810]">
 
         {/* Desktop left icon sidebar */}
         <aside className="hidden md:flex absolute left-0 top-0 bottom-0 w-[88px] bg-background border-r border-border flex-col items-center py-6 z-50 pointer-events-auto">
@@ -1284,7 +1273,7 @@ const MapPoster = () => {
           </div>
         </aside>
 
-        <main className="flex-1 relative w-full h-full flex flex-col items-center justify-center p-3 md:p-6 pb-20 md:pb-6">
+        <main className="flex-1 relative w-full h-full min-h-0 flex flex-col items-center justify-center p-3 md:p-6 md:pl-[88px] pb-20 md:pb-6">
           {/* Synchronized Background Map */}
           <div className="absolute inset-0 z-0 pointer-events-none overflow-hidden grayscale-[0.3] opacity-40 bg-[#050810]">
             <div className="absolute inset-0 blur-sm scale-110">
@@ -1314,10 +1303,10 @@ const MapPoster = () => {
                 backgroundColor: currentColors['Land'],
                 borderColor: currentColors['Road Outline'],
                 aspectRatio: selectedLayout.aspect,
-                maxHeight: '70vh',
+                width: `min(90vw, calc(70vh * ${selectedLayout.aspect}))`,
                 maxWidth: '100%',
-                height: selectedLayout.aspect > 1.2 ? 'auto' : '70vh',
-                width: selectedLayout.aspect > 1.2 ? '100%' : 'auto'
+                maxHeight: '70vh',
+                height: 'auto',
               }}
             >
               <div id="map-capture-layer" className="absolute inset-0">
@@ -1327,11 +1316,7 @@ const MapPoster = () => {
                   center={mapCenter}
                   zoom={zoom}
                   bearing={bearing}
-                  onViewportChange={(v) => {
-                    setMapCenter(v.center);
-                    setZoom(v.zoom);
-                    if (v.bearing !== undefined) setBearing(v.bearing);
-                  }}
+                  onMoveEnd={handleMapMoveEnd}
                   className="w-full h-full"
                   dragPan={!isMapLocked}
                   scrollZoom={!isMapLocked}
@@ -1387,7 +1372,7 @@ const MapPoster = () => {
             </div>
 
             {!isMapLocked && (
-              <div className="flex items-center gap-4 px-4 py-2 bg-background/80 backdrop-blur-xl border border-white/10 rounded-xl shadow-2xl animate-in fade-in slide-in-from-bottom-4 duration-300">
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 px-4 py-3 bg-background/80 backdrop-blur-xl border border-white/10 rounded-xl shadow-2xl animate-in fade-in slide-in-from-bottom-4 duration-300">
                 <button
                   onClick={() => setIsMapLocked(true)}
                   className="flex items-center gap-2 px-4 py-2 bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 rounded-lg text-xs font-bold transition-all transition-colors uppercase"
@@ -1396,7 +1381,7 @@ const MapPoster = () => {
                   Lock Map
                 </button>
 
-                <div className="w-px h-6 bg-white/10" />
+                <div className="hidden sm:block w-px h-6 bg-white/10" />
 
                 <button
                   onClick={() => setIsRotationEnabled(!isRotationEnabled)}
@@ -1409,9 +1394,9 @@ const MapPoster = () => {
                   {isRotationEnabled ? 'Disable Rotation' : 'Enable Rotation'}
                 </button>
 
-                <div className="w-px h-6 bg-white/10" />
+                <div className="hidden sm:block w-px h-6 bg-white/10" />
 
-                <div className="flex items-center gap-3 px-2">
+                <div className="flex flex-1 flex-wrap items-center gap-3 px-2">
                   <button
                     onClick={() => mapRef.current?.zoomTo(zoom - 0.5)}
                     className="p-1.5 hover:bg-white/10 rounded-md text-white transition-colors"
@@ -1444,8 +1429,8 @@ const MapPoster = () => {
             )}
 
             {/* Bottom Actions under the Poster */}
-            <div className="flex items-center gap-3 shrink-0 transition-opacity">
-              <button onClick={handleRecenter} className="flex items-center gap-2 px-4 md:px-6 py-2.5 md:py-3 bg-background/90 backdrop-blur-md hover:bg-secondary hover:text-primary rounded-full border border-border font-medium text-xs md:text-sm text-foreground shadow-xl transition-colors justify-center">
+            <div className="flex flex-col sm:flex-row flex-wrap items-center gap-3 shrink-0 transition-opacity w-full justify-center">
+              <button onClick={handleRecenter} className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 md:px-6 py-2.5 md:py-3 bg-background/90 backdrop-blur-md hover:bg-secondary hover:text-primary rounded-full border border-border font-medium text-xs md:text-sm text-foreground shadow-xl transition-colors">
                 <Crosshair className="w-4 h-4" />
                 <span className="hidden sm:inline">Recenter</span>
               </button>
@@ -1479,9 +1464,9 @@ const MapPoster = () => {
           </div>
 
           {/* Credits Footer — desktop only */}
-          <footer className="hidden md:block mt-auto py-6 w-full text-center z-10 opacity-30 hover:opacity-100 transition-opacity duration-500">
-            <p className="text-[10px] font-mono tracking-[0.3em] text-white uppercase flex items-center justify-center gap-2">
-              © 2026 All Rights Reserved <span className="opacity-30">|</span> Made with <span className="text-red-500 animate-pulse">❤️</span> by Kanishk Kumar Singh
+          <footer className="hidden md:block mt-auto py-6 w-full text-center z-10 text-white opacity-100 transition-opacity duration-500">
+            <p className="text-[10px] font-mono tracking-[0.3em] text-white uppercase flex flex-wrap items-center justify-center gap-2">
+              © 2026 All Rights Reserved <span className="opacity-80">|</span> Made with <span className="text-red-500 animate-pulse">❤️</span> by Kanishk Kumar Singh
             </p>
           </footer>
 
