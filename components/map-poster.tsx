@@ -1560,7 +1560,31 @@ const MapPoster = () => {
                   keyboard={!isMapLocked}
                   doubleClickZoom={!isMapLocked}
                   touchZoomRotate={!isMapLocked}
-                />
+                >
+                  {markers.map((marker) => (
+                    <MapMarker 
+                      key={marker.id} 
+                      longitude={marker.coords[0]} 
+                      latitude={marker.coords[1]}
+                    >
+                      <MarkerContent>
+                        <div className="group relative flex flex-col items-center">
+                          {/* Marker Label */}
+                          <div className="absolute bottom-full mb-2 opacity-0 group-hover:opacity-100 transition-opacity bg-background/90 backdrop-blur-md border border-white/10 px-2 py-1 rounded text-[10px] font-bold text-white whitespace-nowrap shadow-xl z-50">
+                            {marker.name}
+                          </div>
+                          {/* Marker Pin */}
+                          <div className="relative">
+                            <div className="absolute inset-0 bg-primary/20 blur-md rounded-full scale-150 animate-pulse" />
+                            <div className="relative p-1.5 bg-background border-2 border-primary rounded-full shadow-2xl transition-transform group-hover:scale-110 active:scale-95">
+                              <MapPin className="w-3.5 h-3.5 text-primary" />
+                            </div>
+                          </div>
+                        </div>
+                      </MarkerContent>
+                    </MapMarker>
+                  ))}
+                </Map>
               </div>
 
               {showOverlay && (
