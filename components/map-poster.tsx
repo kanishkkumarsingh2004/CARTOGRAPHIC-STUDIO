@@ -356,30 +356,20 @@ const MapPoster = () => {
   useEffect(() => {
     if (!mapRef.current) return;
     const map = mapRef.current;
-    let moveTimeout: ReturnType<typeof setTimeout> | null = null;
-
-    const handleMove = () => {
-      // Clear any pending update
-      if (moveTimeout) clearTimeout(moveTimeout);
-
-      // Wait 3 seconds after movement stops before updating coordinates
-      moveTimeout = setTimeout(() => {
-        const newZoom = map.getZoom();
-        const center = map.getCenter();
-
-        setZoom(newZoom);
-        setMapCenter([center.lng, center.lat]);
-
-        // Sync zoom back to distance: distance = 2^ (24.5 - zoom)
-        const newDistance = Math.round(Math.pow(2, 24.5 - newZoom));
-        setDistance(newDistance);
-      }, 3000);
-    };
 
     const handleMoveEnd = async () => {
+      const newZoom = map.getZoom();
+      const center = map.getCenter();
+
+      setZoom(newZoom);
+      setMapCenter([center.lng, center.lat]);
+
+      // Sync zoom back to distance: distance = 2^ (24.5 - zoom)
+      const newDistance = Math.round(Math.pow(2, 24.5 - newZoom));
+      setDistance(newDistance);
+
       if (isTextManual) return;
       try {
-        const center = map.getCenter();
         const addr = await reverseGeocode(center.lat, center.lng);
         if (addr) {
           const place = addr.city || addr.suburb || addr.county || 'LOCATION';
@@ -389,11 +379,8 @@ const MapPoster = () => {
       } catch (err) { }
     };
 
-    map.on('move', handleMove);
     map.on('moveend', handleMoveEnd);
     return () => {
-      if (moveTimeout) clearTimeout(moveTimeout);
-      map.off('move', handleMove);
       map.off('moveend', handleMoveEnd);
     };
   }, [mapRef, isTextManual]);
@@ -648,7 +635,7 @@ const MapPoster = () => {
       <div className="flex flex-1 relative overflow-hidden bg-[#050810]">
 
         {/* Desktop left icon sidebar */}
-        <aside className="hidden md:flex w-[88px] h-full bg-background border-r border-border flex-col items-center py-6 z-40 shrink-0">
+        <aside className="hidden md:flex absolute left-0 top-0 bottom-0 w-[88px] bg-background border-r border-border flex-col items-center py-6 z-50 pointer-events-auto">
           <div className="flex flex-col gap-6 w-full">
             {tabs.map((tab) => {
               const Icon = tab.icon;
@@ -675,12 +662,12 @@ const MapPoster = () => {
         {/* Unified panel — desktop: left slide-in | mobile: bottom sheet */}
         <aside
           className={`
-            md:flex absolute md:left-[88px] md:top-0 md:bottom-0 md:w-[400px] md:border-r md:border-white/5
-            fixed md:static inset-x-0 bottom-0 max-h-[75vh] md:max-h-none rounded-t-2xl md:rounded-none border-t md:border-t-0 border-white/10
+            md:flex fixed md:absolute md:left-[88px] md:top-0 md:bottom-0 md:w-[400px] md:border-r md:border-white/5
+            inset-x-0 bottom-0 max-h-[75vh] md:max-h-none rounded-t-2xl md:rounded-none border-t md:border-t-0 border-white/10
             bg-[#0a0f18] z-40 md:z-30 flex flex-col overflow-hidden transition-all duration-300 ease-in-out
             ${activeTab
               ? 'translate-y-0 md:translate-x-0 opacity-100'
-              : 'translate-y-full md:translate-y-0 md:-translate-x-10 opacity-0 pointer-events-none'
+              : 'translate-y-full md:translate-y-0 md:-translate-x-full opacity-0 pointer-events-none'
             }
           `}
         >
