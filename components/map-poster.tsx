@@ -1,27 +1,40 @@
+
 'use client';
 
 import React, { useState, useRef, useEffect } from 'react';
-import { 
-  Download, MapPin, Palette, Layout as LayoutIcon, Brush, 
-  Layers, MapPin as MarkerIcon, Settings, Crosshair, MapPinOff, 
-  Search, Github, Instagram, Coffee, Info, X, Lock as LockIcon, Unlock, RefreshCw
+import {
+  Download, MapPin, Palette, Layout as LayoutIcon, Brush,
+  Layers, MapPin as MarkerIcon, Settings, Crosshair, MapPinOff,
+  Search, X, Lock as LockIcon, RefreshCw
 } from 'lucide-react';
 import { Map, MapMarker, MarkerContent, MarkerPopup } from '@/components/ui/map';
+import { ExportProgress } from '@/components/ui/export-progress';
+import { toPng } from 'html-to-image';
 
 const MapPoster = () => {
   const [activeTab, setActiveTab] = useState('theme'); // Default to theme to see changes
   const [exportLoading, setExportLoading] = useState(false);
+  const [exportProgress, setExportProgress] = useState(0);
+  const [exportStatus, setExportStatus] = useState('');
+  const [previewDataUrl, setPreviewDataUrl] = useState<string | null>(null);
+  const [previewFilename, setPreviewFilename] = useState('');
+  const [isMounted, setIsMounted] = useState(false);
   const mapRef = useRef<any>(null);
+  const bgMapRef = useRef<any>(null);
+  const posterRef = useRef<HTMLDivElement>(null);
   const [zoom, setZoom] = useState(13);
   const [mapCenter, setMapCenter] = useState<[number, number]>([77.4402, 12.6408]);
-  const [locName, setLocName] = useState('HAROHALLI TALUK');
+  const [locName, setLocName] = useState('DELHI');
   const [locCountry, setLocCountry] = useState('INDIA');
+  const [bearing, setBearing] = useState(0);
+  const [isAutoLocation, setIsAutoLocation] = useState(true);
   const [isEditorOpen, setIsEditorOpen] = useState(false);
   const [showPosterText, setShowPosterText] = useState(true);
   const [showOverlay, setShowOverlay] = useState(true);
   const [selectedFont, setSelectedFont] = useState('Space Grotesk');
   const [searchQuery, setSearchQuery] = useState('');
   const [searchLoading, setSearchLoading] = useState(false);
+  const [isTextManual, setIsTextManual] = useState(false);
 
   // Layer visibility toggles
   const [showLandcover, setShowLandcover] = useState(true);
@@ -33,12 +46,49 @@ const MapPoster = () => {
   const [showAeroway, setShowAeroway] = useState(true);
   const [showLabels, setShowLabels] = useState(false);
   const [distance, setDistance] = useState(4000);
-  const [markers, setMarkers] = useState<{id: string, name: string, coords: [number, number]}[]>([]);
+  const [markers, setMarkers] = useState<{ id: string, name: string, coords: [number, number] }[]>([]);
 
   const fontOptions = [
-    'Space Grotesk', 'Inter', 'Playfair Display', 'Roboto Mono', 
+    'Space Grotesk', 'Inter', 'Playfair Display', 'Roboto Mono',
     'DM Sans', 'Outfit', 'Crimson Text', 'JetBrains Mono'
   ];
+
+  // Auto-sync location name when map moves
+  // Shared reverse geocode using Photon directly (no API proxy)
+  const reverseGeocode = async (lat: number, lon: number) => {
+    const res = await fetch(`https://photon.komoot.io/reverse?lon=${lon}&lat=${lat}`);
+    if (!res.ok) return null;
+    const data = await res.json();
+    const f = data.features?.[0];
+    if (!f) return null;
+    return {
+      city: f.properties.city || f.properties.town || f.properties.name || '',
+      country: f.properties.country || '',
+      suburb: f.properties.district || f.properties.locality || '',
+      county: f.properties.state || '',
+    };
+  };
+
+  useEffect(() => {
+    setIsMounted(true);
+    if (!isAutoLocation || isTextManual) return;
+
+    const timeoutId = setTimeout(async () => {
+      try {
+        const [lon, lat] = mapCenter;
+        const addr = await reverseGeocode(lat, lon);
+        if (addr) {
+          const place = addr.city || addr.suburb || addr.county || 'LOCATION';
+          setLocName(place.toUpperCase());
+          setLocCountry(addr.country.toUpperCase() || 'COUNTRY');
+        }
+      } catch (err) {
+        console.error('Auto-sync geocode error:', err);
+      }
+    }, 1000);
+
+    return () => clearTimeout(timeoutId);
+  }, [mapCenter, isAutoLocation, isTextManual]);
 
   // --- Color Utility Functions ---
   const hexToRgb = (hex: string): [number, number, number] => {
@@ -78,8 +128,8 @@ const MapPoster = () => {
   ];
 
   const colorLabels = [
-    'Overlay', 'Text', 'Land', 'Landcover', 'Water', 'Waterways', 'Parks', 'Buildings', 
-    'Aeroway', 'Rail', 'Roads Major', 'Roads Minor High', 'Roads Minor Mid', 
+    'Overlay', 'Text', 'Land', 'Landcover', 'Water', 'Waterways', 'Parks', 'Buildings',
+    'Aeroway', 'Rail', 'Roads Major', 'Roads Minor High', 'Roads Minor Mid',
     'Roads Minor Low', 'Roads Path', 'Road Outline'
   ];
 
@@ -112,32 +162,42 @@ const MapPoster = () => {
   };
 
   const layouts = [
-    { id: 'a1-portrait', category: 'PRINT', name: 'A1 PORTRAIT', dims: '59.4 x 84.1 CM', aspect: 1/1.414 },
-    { id: 'a2-portrait', category: 'PRINT', name: 'A2 PORTRAIT', dims: '42 x 59.4 CM', aspect: 1/1.414 },
-    { id: 'a3-portrait', category: 'PRINT', name: 'A3 PORTRAIT', dims: '29.7 x 42 CM', aspect: 1/1.414 },
-    { id: 'a4-portrait', category: 'PRINT', name: 'A4 PORTRAIT', dims: '21 x 29.7 CM', aspect: 1/1.414 },
-    { id: 'a5-portrait', category: 'PRINT', name: 'A5 PORTRAIT', dims: '14.8 x 21 CM', aspect: 1/1.414 },
-    { id: 'us-letter', category: 'PRINT', name: 'LETTER (US)', dims: '21.6 x 27.9 CM', aspect: 21.6/27.9 },
-    { id: 'inst-square', category: 'SOCIAL MEDIA', name: 'INSTAGRAM SQUARE', dims: '1080 x 1080 PX', aspect: 1/1 },
-    { id: 'inst-port', category: 'SOCIAL MEDIA', name: 'INSTAGRAM PORTRAIT', dims: '1080 x 1350 PX', aspect: 1080/1350 },
-    { id: 'story', category: 'SOCIAL MEDIA', name: 'STORY (9:16)', dims: '1080 x 1920 PX', aspect: 9/16 },
-    { id: 'linkedin-post', category: 'SOCIAL MEDIA', name: 'LINKEDIN POST', dims: '1200 x 627 PX', aspect: 1200/627 },
-    { id: 'linkedin-cover', category: 'SOCIAL MEDIA', name: 'LINKEDIN COVER', dims: '1584 x 396 PX', aspect: 1584/396 },
-    { id: 'pinterest', category: 'SOCIAL MEDIA', name: 'PINTEREST PIN', dims: '1000 x 1500 PX', aspect: 1000/1500 },
-    { id: 'desktop', category: 'DIGITAL', name: 'DESKTOP WALLPAPER', dims: '1920 x 1080 PX', aspect: 1920/1080 },
-    { id: 'phone', category: 'DIGITAL', name: 'PHONE WALLPAPER', dims: '1170 x 2532 PX', aspect: 1170/2532 },
+    { id: 'a1-portrait', category: 'PRINT', name: 'A1 PORTRAIT', dims: '59.4 x 84.1 CM', aspect: 1 / 1.414 },
+    { id: 'a2-portrait', category: 'PRINT', name: 'A2 PORTRAIT', dims: '42 x 59.4 CM', aspect: 1 / 1.414 },
+    { id: 'a3-portrait', category: 'PRINT', name: 'A3 PORTRAIT', dims: '29.7 x 42 CM', aspect: 1 / 1.414 },
+    { id: 'a4-portrait', category: 'PRINT', name: 'A4 PORTRAIT', dims: '21 x 29.7 CM', aspect: 1 / 1.414 },
+    { id: 'a5-portrait', category: 'PRINT', name: 'A5 PORTRAIT', dims: '14.8 x 21 CM', aspect: 1 / 1.414 },
+    { id: 'us-letter', category: 'PRINT', name: 'LETTER (US)', dims: '21.6 x 27.9 CM', aspect: 21.6 / 27.9 },
+    { id: 'inst-square', category: 'SOCIAL MEDIA', name: 'INSTAGRAM SQUARE', dims: '1080 x 1080 PX', aspect: 1 / 1 },
+    { id: 'inst-port', category: 'SOCIAL MEDIA', name: 'INSTAGRAM PORTRAIT', dims: '1080 x 1350 PX', aspect: 1080 / 1350 },
+    { id: 'story', category: 'SOCIAL MEDIA', name: 'STORY (9:16)', dims: '1080 x 1920 PX', aspect: 9 / 16 },
+    { id: 'linkedin-post', category: 'SOCIAL MEDIA', name: 'LINKEDIN POST', dims: '1200 x 627 PX', aspect: 1200 / 627 },
+    { id: 'linkedin-cover', category: 'SOCIAL MEDIA', name: 'LINKEDIN COVER', dims: '1584 x 396 PX', aspect: 1584 / 396 },
+    { id: 'pinterest', category: 'SOCIAL MEDIA', name: 'PINTEREST PIN', dims: '1000 x 1500 PX', aspect: 1000 / 1500 },
+    { id: 'desktop', category: 'DIGITAL', name: 'DESKTOP WALLPAPER', dims: '1920 x 1080 PX', aspect: 1920 / 1080 },
+    { id: 'phone', category: 'DIGITAL', name: 'PHONE WALLPAPER', dims: '1170 x 2532 PX', aspect: 1170 / 2532 },
   ];
 
   const [selectedLayoutId, setSelectedLayoutId] = useState('a4-portrait');
   const selectedLayout = layouts.find(l => l.id === selectedLayoutId) || layouts[3];
 
-  const [isMapLocked, setIsMapLocked] = useState(false);
+  const [isMapLocked, setIsMapLocked] = useState(true);
   const [isRotationEnabled, setIsRotationEnabled] = useState(false);
 
   const [selectedThemeId, setSelectedThemeId] = useState('midnight-blue');
   const selectedTheme = themes.find(t => t.id === selectedThemeId) || themes[0];
 
   const [currentColors, setCurrentColors] = useState<Record<string, string>>(() => getColorConfigFromTheme(selectedTheme));
+
+  const [detailLevel, setDetailLevel] = useState(65);
+  const [isDetailAuto, setIsDetailAuto] = useState(true);
+
+  // Sync auto detail level unless user has manually adjusted it
+  useEffect(() => {
+    if (isDetailAuto) {
+      setDetailLevel(Math.min(100, Math.max(0, Math.round(((zoom - 8) / (16 - 8)) * 100))));
+    }
+  }, [zoom, isDetailAuto]);
 
   const updateColor = (label: string, color: string) => {
     setCurrentColors(prev => ({ ...prev, [label]: color }));
@@ -155,134 +215,12 @@ const MapPoster = () => {
     setCurrentColors(getColorConfigFromTheme(selectedTheme));
   };
 
+  // Sync colors and visibility for all maps
   useEffect(() => {
-    if (!mapRef.current) return;
-    const map = mapRef.current;
+    const maps = [mapRef.current, bgMapRef.current].filter(Boolean);
+    if (maps.length === 0) return;
 
-    const layerMapping: Record<string, { patterns: string[] }> = {
-      'Land': { patterns: ['background', 'landcover', 'landuse', 'natural', 'wood', 'scrub', 'grass', 'glacier', 'sand', 'rock'] },
-      'Water': { patterns: ['water', 'ocean', 'sea', 'lake', 'reservoir'] },
-      'Waterways': { patterns: ['waterway', 'river', 'canal', 'stream', 'drain', 'ditch'] },
-      'Parks': { patterns: ['park', 'garden', 'greenery', 'recreation', 'leisure', 'nature_reserve', 'golf_course'] },
-      'Buildings': { patterns: ['building', 'construction', 'roof'] },
-      'Landcover': { patterns: ['landcover', 'landuse_area', 'farmland', 'farmyard', 'industrial', 'commercial', 'residential_area'] },
-      'Aeroway': { patterns: ['aeroway', 'airport', 'runway', 'taxiway', 'apron', 'terminal'] },
-      'Rail': { patterns: ['railway', 'rail', 'transit', 'transportation', 'train', 'station', 'monorail', 'subway', 'tram', 'light_rail'] },
-      'Roads Major': { patterns: ['road_major', 'road_primary', 'road_secondary', 'road_trunk', 'road_motorway', 'motorway', 'trunk', 'primary', 'secondary'] },
-      'Roads Minor High': { patterns: ['road_minor', 'road_tertiary', 'tertiary'] },
-      'Roads Minor Mid': { patterns: ['road_residential', 'road_street', 'residential', 'street'] },
-      'Roads Minor Low': { patterns: ['road_service', 'road_link', 'service', 'link', 'living_street'] },
-      'Roads Path': { patterns: ['road_path', 'road_track', 'road_pedestrian', 'path', 'track', 'pedestrian', 'footway', 'cycleway', 'steps', 'corridor', 'bridleway'] },
-      'Road Outline': { patterns: ['road_outline', 'road_case', 'case', 'outline'] },
-    };
-
-    if (!map.isStyleLoaded()) {
-      const onStyleLoad = () => {
-        applyColors();
-        map.off('styledata', onStyleLoad);
-      };
-      map.on('styledata', onStyleLoad);
-      return;
-    }
-
-    applyColors();
-
-    function applyColors() {
-      const layers = map.getStyle().layers;
-      if (!layers) return;
-
-      Object.entries(layerMapping).forEach(([label, config]) => {
-        const color = currentColors[label];
-        if (!color) return;
-
-        config.patterns.forEach(pattern => {
-          layers.forEach((l: any) => {
-            const isMatch = l.id.toLowerCase().includes(pattern.toLowerCase()) || 
-                          (l.source_layer && l.source_layer.toLowerCase().includes(pattern.toLowerCase()));
-            
-            if (isMatch) {
-               try {
-                 // Determine correct property based on layer type
-                 let prop = '';
-                 if (l.type === 'fill') prop = 'fill-color';
-                 else if (l.type === 'line') prop = 'line-color';
-                 else if (l.type === 'background') prop = 'background-color';
-                 else if (l.type === 'symbol') prop = 'text-color';
-                 
-                 if (prop) {
-                   map.setPaintProperty(l.id, prop, color);
-                 }
-               } catch (e) {}
-            }
-          });
-        });
-      });
-    }
-  }, [currentColors, mapRef]);
-
-  useEffect(() => {
-    if (!mapRef.current) return;
-    const map = mapRef.current;
-
-    if (isMapLocked) {
-      map.dragPan.disable();
-      map.scrollZoom.disable();
-      map.boxZoom.disable();
-      map.dragRotate.disable();
-      map.keyboard.disable();
-      map.doubleClickZoom.disable();
-      map.touchZoomRotate.disable();
-    } else {
-      map.dragPan.enable();
-      map.scrollZoom.enable();
-      map.boxZoom.enable();
-      map.keyboard.enable();
-      map.doubleClickZoom.enable();
-      map.touchZoomRotate.enable();
-      
-      if (isRotationEnabled) {
-        map.dragRotate.enable();
-      } else {
-        map.dragRotate.disable();
-      }
-    }
-  }, [isMapLocked, isRotationEnabled, mapRef]);
-
-  useEffect(() => {
-    if (!mapRef.current) return;
-    const map = mapRef.current;
-
-    const handleMove = () => {
-      const newZoom = map.getZoom();
-      setZoom(newZoom);
-      // Sync zoom back to distance: distance = 2^ (24.5 - zoom)
-      const newDistance = Math.round(Math.pow(2, 24.5 - newZoom));
-      setDistance(newDistance);
-    };
-
-    map.on('move', handleMove);
-    return () => map.off('move', handleMove);
-  }, [mapRef]);
-
-  // Sync distance change to zoom
-  useEffect(() => {
-    if (!mapRef.current) return;
-    const targetZoom = 24.5 - Math.log2(distance);
-    if (Math.abs(mapRef.current.getZoom() - targetZoom) > 0.01) {
-      mapRef.current.setZoom(targetZoom);
-    }
-  }, [distance, mapRef]);
-
-  // Layer visibility effect
-  useEffect(() => {
-    if (!mapRef.current) return;
-    const map = mapRef.current;
-    if (!map.isStyleLoaded()) return;
-
-    const layers = map.getStyle()?.layers;
-    if (!layers) return;
-
-    const layerVisibility: Record<string, boolean> = {
+    const layerVisibilityProps: Record<string, boolean> = {
       'landcover': showLandcover,
       'landuse': showLandcover,
       'building': showBuildings,
@@ -306,27 +244,178 @@ const MapPoster = () => {
       'railway': showRail,
       'rail': showRail,
       'aeroway': showAeroway,
-      'label': showLabels,
-      'text': showLabels,
-      'symbol': showLabels,
-      'place': showLabels,
     };
 
-    layers.forEach((l: any) => {
-      Object.entries(layerVisibility).forEach(([pattern, visible]) => {
-        if (l.id.includes(pattern) || l.type === 'symbol') {
-          try {
-            // Apply visibility to standard layers containing the pattern
-            // or any layer of type 'symbol' (which covers most text/icons)
-            const isMatch = l.id.includes(pattern) || (pattern === 'symbol' && l.type === 'symbol');
-            if (isMatch) {
-              map.setLayoutProperty(l.id, 'visibility', visible ? 'visible' : 'none');
+    const layerMapping: Record<string, { patterns: string[] }> = {
+      'Land': { patterns: ['background', 'landcover', 'landuse', 'natural', 'wood', 'scrub', 'grass', 'glacier', 'sand', 'rock', 'earth', 'ground'] },
+      'Water': { patterns: ['water', 'ocean', 'sea', 'lake', 'reservoir', 'riverbank', 'dock'] },
+      'Waterways': { patterns: ['waterway', 'river', 'canal', 'stream', 'drain', 'ditch'] },
+      'Parks': { patterns: ['park', 'garden', 'greenery', 'recreation', 'leisure', 'nature_reserve', 'golf_course', 'cemetery', 'pitch', 'track_area'] },
+      'Buildings': { patterns: ['building', 'construction', 'roof', 'garage', 'shed', 'house'] },
+      'Landcover': { patterns: ['landcover', 'landuse_area', 'farmland', 'farmyard', 'industrial', 'commercial', 'residential_area', 'quarry'] },
+      'Aeroway': { patterns: ['aeroway', 'airport', 'runway', 'taxiway', 'apron', 'terminal', 'gate', 'hanger'] },
+      'Rail': { patterns: ['railway', 'rail', 'transit', 'transportation_rail', 'train', 'station', 'monorail', 'subway', 'tram', 'light_rail'] },
+      'Roads Major': { patterns: ['road_major', 'road_primary', 'road_secondary', 'road_trunk', 'road_motorway', 'motorway', 'trunk', 'primary', 'secondary', 'highway_major', 'transportation_major', 'main_road'] },
+      'Roads Minor High': { patterns: ['road_minor', 'road_tertiary', 'tertiary', 'highway_minor', 'transportation_minor'] },
+      'Roads Minor Mid': { patterns: ['road_residential', 'road_street', 'residential', 'street', 'highway_residential', 'unclassified'] },
+      'Roads Minor Low': { patterns: ['road_service', 'road_link', 'service', 'link', 'living_street', 'highway_service'] },
+      'Roads Path': { patterns: ['road_path', 'road_track', 'road_pedestrian', 'path', 'track', 'pedestrian', 'footway', 'cycleway', 'steps', 'corridor', 'bridleway', 'pier'] },
+      'Road Outline': { patterns: ['road_outline', 'road_case', 'case', 'outline', 'bridge_case', 'tunnel_case', 'halos'] },
+    };
+
+    const infraPatterns = ['road', 'bridge', 'tunnel', 'highway', 'transportation', 'pier', 'link', 'junction', 'ramp', 'intersection'];
+
+    maps.forEach(map => {
+      const syncStyle = () => {
+        if (!map.isStyleLoaded()) return;
+
+        const layers = map.getStyle()?.layers;
+        if (!layers) return;
+
+        const weightMultiplier = 1 + (detailLevel / 100) * Math.max(0, (16 - map.getZoom()) / 6) * 2;
+
+        layers.forEach((l: any) => {
+          const layerIdLower = l.id.toLowerCase();
+          const sourceLayerLower = (l.source_layer || '').toLowerCase();
+
+          const isDetailLayer = layerIdLower.includes('building') ||
+            layerIdLower.includes('road') ||
+            layerIdLower.includes('park') ||
+            layerIdLower.includes('rail') ||
+            infraPatterns.some(ip => layerIdLower.includes(ip));
+
+          if (isDetailLayer) {
+            try {
+              map.setLayerProperty(l.id, 'minzoom', 0);
+              map.setFilter(l.id, null);
+            } catch (e) { }
+          }
+
+          const labelKeywords = ['label', 'text', 'symbol', 'place', 'name', 'poi', 'point'];
+          if (l.type === 'symbol' || labelKeywords.some(kw => layerIdLower.includes(kw))) {
+            try {
+              map.setLayoutProperty(l.id, 'visibility', showLabels ? 'visible' : 'none');
+              map.setPaintProperty(l.id, 'text-color', currentColors['Text']);
+            } catch (e) { }
+            return;
+          }
+
+          let appliedColor = '';
+          Object.entries(layerMapping).forEach(([label, config]) => {
+            if (config.patterns.some(p => layerIdLower.includes(p) || sourceLayerLower.includes(p))) {
+              appliedColor = currentColors[label];
             }
-          } catch (e) {}
-        }
-      });
+          });
+
+          if (!appliedColor && infraPatterns.some(ip => layerIdLower.includes(ip) || sourceLayerLower.includes(ip))) {
+            appliedColor = currentColors['Roads Minor Mid'];
+          }
+
+          if (appliedColor) {
+            try {
+              const prop = l.type === 'fill' ? 'fill-color' : l.type === 'line' ? 'line-color' : l.type === 'background' ? 'background-color' : '';
+              if (prop) map.setPaintProperty(l.id, prop, appliedColor);
+
+              const visibilityKey = Object.keys(layerVisibilityProps).find(k => layerIdLower.includes(k));
+              if (visibilityKey) {
+                map.setLayoutProperty(l.id, 'visibility', (layerVisibilityProps as any)[visibilityKey] ? 'visible' : 'none');
+              }
+
+              if (l.type === 'line' && (isDetailLayer || appliedColor.startsWith('Roads'))) {
+                map.setPaintProperty(l.id, 'line-width',
+                  ['*', ['match', ['geometry-type'], 'LineString', 1, 1], weightMultiplier]
+                );
+              }
+            } catch (e) { }
+          }
+        });
+      };
+
+      if (!map.isStyleLoaded()) {
+        map.once('load', syncStyle);
+        map.on('styledata', syncStyle);
+      } else {
+        syncStyle();
+        map.on('styledata', syncStyle);
+      }
     });
-  }, [showLandcover, showBuildings, showWater, showParks, showRoads, showRail, showAeroway, showLabels, mapRef, currentColors]);
+
+    return () => {
+      maps.forEach(map => {
+        // We don't remove syncStyle specifically because it's a closure, 
+        // but we can ensure we don't leak memory if needed.
+        // MapLibre doesn't have a clean "remove all listeners for this function" 
+        // unless we store them, but since we recreate the maps rarely, it's okay.
+      });
+    };
+  }, [
+    currentColors, showLandcover, showBuildings, showWater,
+    showParks, showRoads, showRail, showAeroway, showLabels, mapRef, bgMapRef, detailLevel, isMounted
+  ]);
+
+  useEffect(() => {
+    if (!mapRef.current) return;
+    const map = mapRef.current;
+    let moveTimeout: ReturnType<typeof setTimeout> | null = null;
+
+    const handleMove = () => {
+      // Clear any pending update
+      if (moveTimeout) clearTimeout(moveTimeout);
+
+      // Wait 3 seconds after movement stops before updating coordinates
+      moveTimeout = setTimeout(() => {
+        const newZoom = map.getZoom();
+        const center = map.getCenter();
+
+        setZoom(newZoom);
+        setMapCenter([center.lng, center.lat]);
+
+        // Sync zoom back to distance: distance = 2^ (24.5 - zoom)
+        const newDistance = Math.round(Math.pow(2, 24.5 - newZoom));
+        setDistance(newDistance);
+      }, 3000);
+    };
+
+    const handleMoveEnd = async () => {
+      if (isTextManual) return;
+      try {
+        const center = map.getCenter();
+        const addr = await reverseGeocode(center.lat, center.lng);
+        if (addr) {
+          const place = addr.city || addr.suburb || addr.county || 'LOCATION';
+          setLocName(place.toUpperCase());
+          setLocCountry(addr.country.toUpperCase() || 'EARTH');
+        }
+      } catch (err) { }
+    };
+
+    map.on('move', handleMove);
+    map.on('moveend', handleMoveEnd);
+    return () => {
+      if (moveTimeout) clearTimeout(moveTimeout);
+      map.off('move', handleMove);
+      map.off('moveend', handleMoveEnd);
+    };
+  }, [mapRef, isTextManual]);
+
+  // Sync background map position
+  useEffect(() => {
+    if (bgMapRef.current) {
+      bgMapRef.current.jumpTo({
+        center: mapCenter,
+        zoom: Math.max(0, zoom - 1)
+      });
+    }
+  }, [mapCenter, zoom]);
+
+  // Sync distance change to zoom
+  useEffect(() => {
+    if (!mapRef.current) return;
+    const targetZoom = 24.5 - Math.log2(distance);
+    if (Math.abs(mapRef.current.getZoom() - targetZoom) > 0.01) {
+      mapRef.current.setZoom(targetZoom);
+    }
+  }, [distance, mapRef]);
 
   const handleGeolocation = () => {
     if (!navigator.geolocation) {
@@ -338,19 +427,17 @@ const MapPoster = () => {
         const { latitude, longitude } = position.coords;
         setMapCenter([longitude, latitude]);
         setZoom(13);
-        
+
         if (mapRef.current) {
           (mapRef.current as any).flyTo({ center: [longitude, latitude], zoom: 13, duration: 1500 });
         }
-        
+
         try {
-          const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}`);
-          const data = await res.json();
-          if (data && data.address) {
-            const place = data.address.city || data.address.town || data.address.village || data.address.suburb || data.address.county || 'LOCALITY';
-            const country = data.address.country || 'COUNTRY';
+          const addr = await reverseGeocode(latitude, longitude);
+          if (addr) {
+            const place = addr.city || addr.suburb || addr.county || 'LOCALITY';
             setLocName(place.toUpperCase());
-            setLocCountry(country.toUpperCase());
+            setLocCountry(addr.country.toUpperCase() || 'COUNTRY');
           } else {
             setLocName('CURRENT LOCATION');
             setLocCountry('GPS POSITION');
@@ -372,36 +459,127 @@ const MapPoster = () => {
 
     setSearchLoading(true);
     try {
-      const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(searchQuery)}&limit=1`);
+      const res = await fetch(`https://photon.komoot.io/api/?q=${encodeURIComponent(searchQuery)}&limit=1`);
       const data = await res.json();
-      
-      if (data && data.length > 0) {
-        const result = data[0];
-        const lon = parseFloat(result.lon);
-        const lat = parseFloat(result.lat);
-        
+      const feature = data.features?.[0];
+
+      if (feature) {
+        const lon = feature.geometry.coordinates[0];
+        const lat = feature.geometry.coordinates[1];
+
         setMapCenter([lon, lat]);
         setZoom(13);
-
         if (mapRef.current) {
           mapRef.current.flyTo({ center: [lon, lat], zoom: 13, duration: 2000 });
         }
 
-        // Try to get structured address for poster
-        const detailRes = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}`);
-        const detailData = await detailRes.json();
-        
-        if (detailData && detailData.address) {
-          const place = detailData.address.city || detailData.address.town || detailData.address.village || detailData.address.suburb || detailData.address.county || detailData.display_name.split(',')[0];
-          const country = detailData.address.country || 'COUNTRY';
+        const addr = await reverseGeocode(lat, lon);
+        if (addr) {
+          const place = addr.city || addr.suburb || addr.county || feature.properties.name || 'LOCATION';
           setLocName(place.toUpperCase());
-          setLocCountry(country.toUpperCase());
+          setLocCountry(addr.country.toUpperCase() || 'COUNTRY');
         }
       }
     } catch (err) {
       console.error('Search error:', err);
     } finally {
       setSearchLoading(false);
+    }
+  };
+
+  const handleDownload = async () => {
+    if (!posterRef.current || !mapRef.current) return;
+
+    setExportLoading(true);
+    setExportProgress(0);
+    setExportStatus('CAPTURING MAP...');
+
+    const glCanvas = mapRef.current.getCanvas();
+    const mapLayer = posterRef.current.querySelector('#map-capture-layer') as HTMLElement | null;
+    const mapCanvasEl = mapLayer?.querySelector('canvas') as HTMLCanvasElement | null;
+    let proxyImg: HTMLImageElement | null = null;
+
+    try {
+      await (document as any).fonts?.ready.catch(() => {});
+      setExportProgress(20);
+
+      // Force a render and capture the frame synchronously inside the render callback
+      // This is the only reliable way to read a WebGL canvas with preserveDrawingBuffer
+      const mapDataUrl = await new Promise<string>((resolve) => {
+        mapRef.current!.once('render', () => {
+          // Read immediately while GL buffer is still populated
+          try {
+            resolve(glCanvas.toDataURL('image/png'));
+          } catch {
+            resolve('');
+          }
+        });
+        mapRef.current!.triggerRepaint();
+        // Safety timeout
+        setTimeout(() => {
+          try { resolve(glCanvas.toDataURL('image/png')); } catch { resolve(''); }
+        }, 1000);
+      });
+
+      console.log('[export] mapDataUrl length:', mapDataUrl.length);
+
+      setExportProgress(50);
+      setExportStatus('COMPOSITING...');
+
+      if (mapDataUrl && mapDataUrl.length > 5000 && mapLayer) {
+        proxyImg = new Image();
+        await new Promise<void>(res => {
+          proxyImg!.onload = () => res();
+          proxyImg!.onerror = () => res();
+          proxyImg!.src = mapDataUrl;
+        });
+        proxyImg.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:5;';
+        if (mapCanvasEl) mapCanvasEl.style.visibility = 'hidden';
+        mapLayer.appendChild(proxyImg);
+        await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+      }
+
+      setExportProgress(75);
+      setExportStatus('RENDERING...');
+
+      let dataUrl = '';
+      try {
+        dataUrl = await toPng(posterRef.current, {
+          pixelRatio: 2,
+          cacheBust: true,
+          backgroundColor: currentColors['Land'] || '#000',
+          filter: (node: Element) => {
+            if (node === mapCanvasEl) return false;
+            if (node.tagName === 'LINK' && (node as HTMLLinkElement).rel === 'stylesheet') {
+              try { return !!((node as any).sheet?.cssRules); } catch { return false; }
+            }
+            return true;
+          },
+        });
+      } catch {
+        dataUrl = await toPng(posterRef.current, {
+          pixelRatio: 1,
+          cacheBust: true,
+          backgroundColor: currentColors['Land'] || '#000',
+          filter: (node: Element) => node !== mapCanvasEl,
+        });
+      }
+
+      setExportStatus('EXPORT COMPLETE!');
+      setExportProgress(100);
+      await new Promise(r => setTimeout(r, 800));
+
+      setPreviewFilename(`${locName.split(',')[0].trim().replace(/\s+/g, '_')}_Map_Poster.png`);
+      setPreviewDataUrl(dataUrl);
+    } catch (err) {
+      console.error('Export error:', err);
+      alert('Failed to generate image. Please try again.');
+    } finally {
+      if (proxyImg && mapLayer) { try { mapLayer.removeChild(proxyImg); } catch {} }
+      if (mapCanvasEl) mapCanvasEl.style.visibility = '';
+      setExportLoading(false);
+      setExportProgress(0);
+      setExportStatus('');
     }
   };
 
@@ -413,10 +591,10 @@ const MapPoster = () => {
 
   const handleAddMarker = () => {
     const id = Math.random().toString(36).substr(2, 9);
-    setMarkers([...markers, { 
-      id, 
-      name: `MARKER ${markers.length + 1}`, 
-      coords: [mapCenter[0], mapCenter[1]] 
+    setMarkers([...markers, {
+      id,
+      name: `MARKER ${markers.length + 1}`,
+      coords: [mapCenter[0], mapCenter[1]]
     }]);
   };
 
@@ -440,41 +618,37 @@ const MapPoster = () => {
         @keyframes spin-slow { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
         .animate-spin-slow { animation: spin-slow 3s linear infinite; }
       `}</style>
-      <header className="h-16 border-b border-border bg-background flex items-center justify-between px-6 z-50 shrink-0">
-        <div className="flex items-center gap-3">
-          <div className="w-6 h-6 bg-primary rounded-tr-xl rounded-bl-xl rounded-br-sm rounded-tl-sm rotate-45 flex items-center justify-center">
+
+      {/* Header */}
+      <header className="h-14 md:h-16 border-b border-border bg-background flex items-center justify-between px-4 md:px-6 z-50 shrink-0">
+        <div className="flex items-center gap-2 md:gap-3">
+          <div className="w-6 h-6 bg-primary rounded-tr-xl rounded-bl-xl rounded-br-sm rounded-tl-sm rotate-45 flex items-center justify-center shrink-0">
             <div className="w-3 h-3 bg-background rounded-full"></div>
           </div>
           <div className="flex items-baseline gap-2">
-            <h1 className="text-xl font-bold tracking-widest text-foreground font-sans">
+            <h1 className="text-sm md:text-xl font-bold tracking-widest text-foreground font-sans">
               CARTOGRAPHIC STUDIO
             </h1>
-            <span className="text-[10px] text-muted-foreground tracking-[0.2em] font-medium">
+            <span className="hidden md:inline text-[10px] text-muted-foreground tracking-[0.2em] font-medium">
               FREE MAP POSTER & WALLPAPER CREATOR
             </span>
           </div>
         </div>
-
-        <div className="flex items-center gap-3 space-x-1">
-          <button className="flex items-center gap-2 px-3 py-1.5 bg-secondary/50 hover:bg-secondary rounded text-xs font-medium border border-border/50 text-foreground transition-colors">
-            <Github className="w-4 h-4" />
-            2,723 ★
-          </button>
-          <button className="p-2 bg-secondary/50 hover:bg-secondary rounded border border-border/50 text-foreground transition-colors">
-            <Instagram className="w-4 h-4" />
-          </button>
-          <button className="p-2 bg-secondary/50 hover:bg-secondary rounded border border-border/50 text-foreground transition-colors">
-            <Coffee className="w-4 h-4" />
-          </button>
-          <button className="px-4 py-1.5 bg-secondary/50 hover:bg-secondary rounded text-xs font-bold tracking-widest border border-border/50 text-foreground transition-colors">
-            ABOUT
-          </button>
-        </div>
+        {/* Mobile download button in header */}
+        <button
+          onClick={handleDownload}
+          disabled={exportLoading}
+          className="md:hidden flex items-center gap-2 px-4 py-2 bg-white rounded-lg text-black font-black tracking-wider text-[10px] shadow-lg transition-all active:scale-95 disabled:opacity-50"
+        >
+          {exportLoading ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
+          {exportLoading ? '...' : 'EXPORT'}
+        </button>
       </header>
 
       <div className="flex flex-1 relative overflow-hidden bg-[#050810]">
-        
-        <aside className="w-[88px] h-full bg-background border-r border-border flex flex-col items-center py-6 z-40 shrink-0">
+
+        {/* Desktop left icon sidebar */}
+        <aside className="hidden md:flex w-[88px] h-full bg-background border-r border-border flex-col items-center py-6 z-40 shrink-0">
           <div className="flex flex-col gap-6 w-full">
             {tabs.map((tab) => {
               const Icon = tab.icon;
@@ -486,9 +660,7 @@ const MapPoster = () => {
                     setActiveTab(activeTab === tab.id ? '' : tab.id);
                     if (tab.id !== 'theme') setIsEditorOpen(false);
                   }}
-                  className={`flex flex-col items-center gap-1.5 w-full relative transition-colors ${
-                    isActive ? 'text-primary' : 'text-muted-foreground hover:text-foreground'
-                  }`}
+                  className={`flex flex-col items-center gap-1.5 w-full relative transition-colors ${isActive ? 'text-primary' : 'text-muted-foreground hover:text-foreground'}`}
                 >
                   <div className={`p-2 rounded-lg ${isActive ? 'bg-primary/10' : ''}`}>
                     <Icon className="w-5 h-5" strokeWidth={isActive ? 2.5 : 1.5} />
@@ -500,14 +672,25 @@ const MapPoster = () => {
           </div>
         </aside>
 
-        <aside 
-          className={`absolute left-[88px] top-0 bottom-0 w-[400px] bg-[#0a0f18] border-r border-white/5 z-30 flex flex-col overflow-hidden transition-all duration-300 ease-in-out ${
-            activeTab ? 'translate-x-0 opacity-100' : '-translate-x-10 opacity-0 pointer-events-none'
-          }`}
+        {/* Unified panel — desktop: left slide-in | mobile: bottom sheet */}
+        <aside
+          className={`
+            md:flex absolute md:left-[88px] md:top-0 md:bottom-0 md:w-[400px] md:border-r md:border-white/5
+            fixed md:static inset-x-0 bottom-0 max-h-[75vh] md:max-h-none rounded-t-2xl md:rounded-none border-t md:border-t-0 border-white/10
+            bg-[#0a0f18] z-40 md:z-30 flex flex-col overflow-hidden transition-all duration-300 ease-in-out
+            ${activeTab
+              ? 'translate-y-0 md:translate-x-0 opacity-100'
+              : 'translate-y-full md:translate-y-0 md:-translate-x-10 opacity-0 pointer-events-none'
+            }
+          `}
         >
+          {/* Mobile drag handle */}
+          <div className="md:hidden flex justify-center pt-3 pb-1 shrink-0 cursor-pointer" onClick={() => setActiveTab('')}>
+            <div className="w-10 h-1 bg-white/20 rounded-full" />
+          </div>
           <div className="p-6 pb-4 border-b border-white/5 space-y-4">
             <div className="flex items-center gap-2">
-              <form 
+              <form
                 onSubmit={handleSearch}
                 className="flex items-center bg-white/5 border border-white/10 rounded-lg pl-3 pr-2 py-2 w-full shadow-inner transition-all focus-within:border-primary/50 focus-within:bg-white/10 grow"
               >
@@ -516,15 +699,15 @@ const MapPoster = () => {
                 ) : (
                   <Search className="w-4 h-4 text-muted-foreground mr-3" />
                 )}
-                <input 
-                  type="text" 
+                <input
+                  type="text"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder="Search for a location..."
                   className="bg-transparent text-sm text-white flex-1 outline-none truncate font-sans selection:bg-primary/30"
                 />
                 {searchQuery && (
-                  <button 
+                  <button
                     type="button"
                     onClick={() => setSearchQuery('')}
                     className="p-1 hover:bg-white/10 rounded text-muted-foreground transition-colors"
@@ -533,9 +716,9 @@ const MapPoster = () => {
                   </button>
                 )}
               </form>
-              <button 
-                onClick={handleGeolocation} 
-                className={`shrink-0 p-2.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg shadow-lg text-white transition-colors ${searchLoading ? 'opacity-50 pointer-events-none' : ''}`} 
+              <button
+                onClick={handleGeolocation}
+                className={`shrink-0 p-2.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg shadow-lg text-white transition-colors ${searchLoading ? 'opacity-50 pointer-events-none' : ''}`}
                 title="My Location"
               >
                 <Crosshair className="w-4 h-4" />
@@ -554,7 +737,7 @@ const MapPoster = () => {
                     <div className="p-6 pb-2">
                       <div className="flex items-center justify-between mb-2">
                         <h2 className="text-sm font-bold tracking-[0.1em] text-white uppercase">THEME: {selectedTheme.name}</h2>
-                        <button 
+                        <button
                           onClick={() => setIsEditorOpen(true)}
                           className="p-2 bg-white/5 hover:bg-white/10 rounded-lg text-white transition-colors"
                         >
@@ -565,23 +748,22 @@ const MapPoster = () => {
                         {selectedTheme.description}
                       </p>
                     </div>
-                    
+
                     <div className="px-4 pb-6 space-y-3">
                       {themes.map((theme) => (
                         <button
                           key={theme.id}
                           onClick={() => handleThemeSelect(theme.id)}
-                          className={`w-full group text-left rounded-xl border transition-all overflow-hidden ${
-                            selectedThemeId === theme.id 
-                              ? 'border-primary/50 bg-primary/5 shadow-lg shadow-primary/5' 
+                          className={`w-full group text-left rounded-xl border transition-all overflow-hidden ${selectedThemeId === theme.id
+                              ? 'border-primary/50 bg-primary/5 shadow-lg shadow-primary/5'
                               : 'border-white/5 bg-white/[0.02] hover:bg-white/[0.05] hover:border-white/10'
-                          }`}
+                            }`}
                         >
                           <div className="h-24 w-full flex relative overflow-hidden">
                             {theme.colors.map((color, idx) => (
-                              <div 
-                                key={idx} 
-                                className="flex-1 h-full relative" 
+                              <div
+                                key={idx}
+                                className="flex-1 h-full relative"
                                 style={{ backgroundColor: color }}
                               >
                                 <div className="absolute inset-0 bg-gradient-to-br from-black/20 to-transparent" />
@@ -608,15 +790,15 @@ const MapPoster = () => {
                       <div className="flex items-center justify-between">
                         <span className="text-[11px] font-bold text-muted-foreground tracking-wider uppercase">Editing: Color</span>
                         <div className="flex items-center gap-2">
-                           <button 
-                             onClick={handleResetColors}
-                             className="px-3 py-1.5 text-[10px] font-bold tracking-wider rounded border border-white/10 hover:bg-white/5 text-muted-foreground transition-colors uppercase"
-                           >
+                          <button
+                            onClick={handleResetColors}
+                            className="px-3 py-1.5 text-[10px] font-bold tracking-wider rounded border border-white/10 hover:bg-white/5 text-muted-foreground transition-colors uppercase"
+                          >
                             Reset All Colors
                           </button>
-                          <button 
-                             onClick={() => setIsEditorOpen(false)}
-                             className="px-4 py-1.5 text-[10px] font-bold tracking-wider rounded bg-primary text-background hover:opacity-90 transition-all uppercase"
+                          <button
+                            onClick={() => setIsEditorOpen(false)}
+                            className="px-4 py-1.5 text-[10px] font-bold tracking-wider rounded bg-primary text-background hover:opacity-90 transition-all uppercase"
                           >
                             Done
                           </button>
@@ -629,14 +811,14 @@ const MapPoster = () => {
                         {colorLabels.map((label, idx) => (
                           <div key={idx} className="flex flex-col items-center gap-2 group relative">
                             <label className="cursor-pointer">
-                              <input 
-                                type="color" 
-                                value={currentColors[label]} 
+                              <input
+                                type="color"
+                                value={currentColors[label]}
                                 onChange={(e) => updateColor(label, e.target.value)}
                                 className="sr-only"
                               />
-                              <div 
-                                className="w-12 h-12 rounded-lg border border-white/10 shadow-inner transition-transform group-hover:scale-110 active:scale-95" 
+                              <div
+                                className="w-12 h-12 rounded-lg border border-white/10 shadow-inner transition-transform group-hover:scale-110 active:scale-95"
                                 style={{ backgroundColor: currentColors[label] }}
                               />
                             </label>
@@ -646,15 +828,15 @@ const MapPoster = () => {
                           </div>
                         ))}
                       </div>
-                      
+
                       <div className="mt-12 pt-8 border-t border-white/5 opacity-50">
                         <div className="flex flex-col gap-4">
-                           <div className="h-1.5 w-full bg-white/5 rounded-full overflow-hidden">
-                              <div className="h-full w-2/3 bg-primary/30 rounded-full" />
-                           </div>
-                           <div className="h-1.5 w-full bg-white/5 rounded-full overflow-hidden">
-                              <div className="h-full w-1/3 bg-primary/20 rounded-full" />
-                           </div>
+                          <div className="h-1.5 w-full bg-white/5 rounded-full overflow-hidden">
+                            <div className="h-full w-2/3 bg-primary/30 rounded-full" />
+                          </div>
+                          <div className="h-1.5 w-full bg-white/5 rounded-full overflow-hidden">
+                            <div className="h-full w-1/3 bg-primary/20 rounded-full" />
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -686,11 +868,10 @@ const MapPoster = () => {
                           <button
                             key={layout.id}
                             onClick={() => setSelectedLayoutId(layout.id)}
-                            className={`flex flex-col text-left rounded-xl border p-3 transition-all ${
-                              selectedLayoutId === layout.id 
-                                ? 'border-primary/50 bg-primary/5 shadow-lg' 
+                            className={`flex flex-col text-left rounded-xl border p-3 transition-all ${selectedLayoutId === layout.id
+                                ? 'border-primary/50 bg-primary/5 shadow-lg'
                                 : 'border-white/5 bg-white/[0.02] hover:bg-white/[0.05] hover:border-white/10'
-                            }`}
+                              }`}
                           >
                             <span className="text-[9px] font-bold text-white mb-0.5 uppercase tracking-tighter truncate w-full">
                               {layout.name}
@@ -698,14 +879,13 @@ const MapPoster = () => {
                             <span className="text-[8px] text-muted-foreground mb-3 font-mono">
                               {layout.dims}
                             </span>
-                            
+
                             <div className="mt-auto flex items-center justify-center h-20 w-full bg-[#1a1f2b] rounded-lg border border-white/5 overflow-hidden">
-                               <div 
-                                  className={`bg-primary/30 border border-primary/20 rounded-sm shadow-sm transition-all duration-300 ${
-                                    layout.aspect > 1 ? 'w-[70%] h-[40%]' : 'w-[40%] h-[70%]'
-                                  }`} 
-                                  style={{ aspectRatio: layout.aspect }}
-                               />
+                              <div
+                                className={`bg-primary/30 border border-primary/20 rounded-sm shadow-sm transition-all duration-300 ${layout.aspect > 1 ? 'w-[70%] h-[40%]' : 'w-[40%] h-[70%]'
+                                  }`}
+                                style={{ aspectRatio: layout.aspect }}
+                              />
                             </div>
                           </button>
                         ))}
@@ -729,30 +909,26 @@ const MapPoster = () => {
                   {/* Toggle: Poster Text */}
                   <div className="flex items-center justify-between">
                     <span className="text-sm font-medium text-white">Poster text</span>
-                    <button 
+                    <button
                       onClick={() => setShowPosterText(!showPosterText)}
-                      className={`relative w-12 h-6 rounded-full transition-colors duration-300 ${
-                        showPosterText ? 'bg-primary' : 'bg-white/10'
-                      }`}
+                      className={`relative w-12 h-6 rounded-full transition-colors duration-300 ${showPosterText ? 'bg-primary' : 'bg-white/10'
+                        }`}
                     >
-                      <div className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow-md transition-transform duration-300 ${
-                        showPosterText ? 'translate-x-6' : 'translate-x-0.5'
-                      }`} />
+                      <div className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow-md transition-transform duration-300 ${showPosterText ? 'translate-x-6' : 'translate-x-0.5'
+                        }`} />
                     </button>
                   </div>
 
                   {/* Toggle: Overlay Layer */}
                   <div className="flex items-center justify-between">
                     <span className="text-sm font-medium text-white">Overlay layer</span>
-                    <button 
+                    <button
                       onClick={() => setShowOverlay(!showOverlay)}
-                      className={`relative w-12 h-6 rounded-full transition-colors duration-300 ${
-                        showOverlay ? 'bg-primary' : 'bg-white/10'
-                      }`}
+                      className={`relative w-12 h-6 rounded-full transition-colors duration-300 ${showOverlay ? 'bg-primary' : 'bg-white/10'
+                        }`}
                     >
-                      <div className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow-md transition-transform duration-300 ${
-                        showOverlay ? 'translate-x-6' : 'translate-x-0.5'
-                      }`} />
+                      <div className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow-md transition-transform duration-300 ${showOverlay ? 'translate-x-6' : 'translate-x-0.5'
+                        }`} />
                     </button>
                   </div>
 
@@ -760,19 +936,19 @@ const MapPoster = () => {
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <label className="text-xs font-medium text-muted-foreground mb-2 block">Display city</label>
-                      <input 
-                        type="text" 
+                      <input
+                        type="text"
                         value={locName}
-                        onChange={(e) => setLocName(e.target.value.toUpperCase())}
+                        onChange={(e) => { setIsTextManual(true); setLocName(e.target.value.toUpperCase()); }}
                         className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2.5 text-sm text-white placeholder-muted-foreground focus:border-primary/50 focus:outline-none transition-colors"
                       />
                     </div>
                     <div>
                       <label className="text-xs font-medium text-muted-foreground mb-2 block">Display country</label>
-                      <input 
-                        type="text" 
+                      <input
+                        type="text"
                         value={locCountry}
-                        onChange={(e) => setLocCountry(e.target.value.toUpperCase())}
+                        onChange={(e) => { setIsTextManual(true); setLocCountry(e.target.value.toUpperCase()); }}
                         className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2.5 text-sm text-white placeholder-muted-foreground focus:border-primary/50 focus:outline-none transition-colors"
                       />
                     </div>
@@ -800,19 +976,29 @@ const MapPoster = () => {
                   </div>
 
                   {/* Font Preview */}
-                  <div className="p-4 rounded-xl border border-white/5 bg-white/[0.02]">
-                    <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-3">Preview</p>
-                    <p className="text-2xl font-bold tracking-[0.15em] text-white" style={{ fontFamily: selectedFont }}>
-                      {locName || 'CITY NAME'}
-                    </p>
-                    <p className="text-sm tracking-[0.3em] text-muted-foreground mt-1" style={{ fontFamily: selectedFont }}>
-                      {locCountry || 'COUNTRY'}
-                    </p>
+                  <div className="p-4 rounded-xl border border-white/5 bg-white/[0.02] relative h-32 overflow-hidden">
+                    <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-3 relative z-10">Font Preview</p>
+                    <div className="absolute inset-0 flex flex-col items-center justify-center p-6 text-center pointer-events-none">
+                      <div className="scale-90 origin-center">
+                        <h1
+                          className="font-black tracking-[0.4em] text-white leading-none mb-3"
+                          style={{ fontFamily: selectedFont, fontSize: '20px' }}
+                        >
+                          {locName || 'CITY NAME'}
+                        </h1>
+                        <div className="w-12 h-[1px] bg-white/20 mb-3 mx-auto" />
+                        <p
+                          className="tracking-[0.4em] text-white/60 uppercase"
+                          style={{ fontFamily: selectedFont, fontSize: '9px' }}
+                        >
+                          {locCountry || 'COUNTRY'}
+                        </p>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
             )}
-
             {activeTab === 'layers' && (
               <div className="flex flex-col h-full bg-[#0c111c]">
                 <div className="p-6 pb-4 border-b border-white/5">
@@ -833,60 +1019,85 @@ const MapPoster = () => {
                   ].map(({ label, state, setter }) => (
                     <div key={label} className="flex items-center justify-between">
                       <span className="text-sm font-medium text-white">{label}</span>
-                      <button 
+                      <button
                         onClick={() => setter(!state)}
-                        className={`relative w-12 h-6 rounded-full transition-colors duration-300 ${
-                          state ? 'bg-primary' : 'bg-white/10'
-                        }`}
+                        className={`relative w-12 h-6 rounded-full transition-colors duration-300 ${state ? 'bg-primary' : 'bg-white/10'
+                          }`}
                       >
-                        <div className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow-md transition-transform duration-300 ${
-                          state ? 'translate-x-6' : 'translate-x-0.5'
-                        }`} />
+                        <div className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow-md transition-transform duration-300 ${state ? 'translate-x-6' : 'translate-x-0.5'
+                          }`} />
                       </button>
                     </div>
                   ))}
 
                   {/* Divider */}
                   <div className="border-t border-white/5 pt-6">
+                    <div className="flex items-center justify-between mb-2">
+                      <h3 className="text-[10px] font-black tracking-[0.2em] text-primary uppercase">MAP DETAIL LEVEL</h3>
+                      <span className="text-[10px] font-bold text-white bg-primary/20 px-2 py-0.5 rounded-full border border-primary/30">
+                        {detailLevel}%
+                      </span>
+                    </div>
+                    <div className="relative pt-1 pb-6 px-1">
+                      <input
+                        type="range"
+                        min="0"
+                        max="100"
+                        step="1"
+                        value={detailLevel}
+                        onChange={(e) => {
+                          const val = parseInt(e.target.value);
+                          setDetailLevel(val);
+                          setIsDetailAuto(false);
+                        }}
+                        className="w-full h-1 bg-white/10 rounded-full appearance-none cursor-pointer accent-primary"
+                        style={{
+                          background: `linear-gradient(to right, var(--primary) 0%, var(--primary) ${detailLevel}%, rgba(255,255,255,0.1) ${detailLevel}%, rgba(255,255,255,0.1) 100%)`
+                        }}
+                      />
+                      {!isDetailAuto && (
+                        <button
+                          onClick={() => setIsDetailAuto(true)}
+                          className="absolute right-0 top-6 text-[9px] font-bold text-primary hover:text-white transition-colors uppercase tracking-tighter"
+                        >
+                          Auto Sync
+                        </button>
+                      )}
+                    </div>
+
                     <h3 className="text-[10px] font-black tracking-[0.2em] text-primary uppercase mb-6">MAP DETAILS</h3>
 
                     {/* Distance Control */}
                     <div className="mb-8">
-                       <div className="flex items-center justify-between mb-4">
-                          <span className="text-sm font-bold text-white">Distance (m)</span>
-                          <div className="bg-white/5 border border-white/10 rounded-xl px-4 py-3 min-w-[120px] flex justify-end shadow-inner">
-                             <input 
-                                type="text"
-                                value={distance}
-                                onChange={(e) => {
-                                   const val = parseInt(e.target.value.replace(/\D/g, ''));
-                                   if (!isNaN(val)) setDistance(val);
-                                }}
-                                className="bg-transparent text-right text-white font-bold text-base outline-none w-full"
-                             />
-                          </div>
-                       </div>
-                       
-                       <div className="relative pt-1 pb-6 px-1">
-                          <input 
-                             type="range"
-                             min="4.6" // ln(100)
-                             max="16.8" // ln(20M)
-                             step="0.01"
-                             value={Math.log(distance)}
-                             onChange={(e) => setDistance(Math.round(Math.exp(parseFloat(e.target.value))))}
-                             className="w-full h-1.5 bg-white/10 rounded-full appearance-none cursor-pointer accent-primary"
-                             style={{
-                                background: `linear-gradient(to right, var(--primary) 0%, var(--primary) ${((Math.log(distance) - 4.6) / (16.8 - 4.6)) * 100}%, rgba(255,255,255,0.1) ${((Math.log(distance) - 4.6) / (16.8 - 4.6)) * 100}%, rgba(255,255,255,0.1) 100%)`
-                             }}
+                      <div className="flex items-center justify-between mb-4">
+                        <span className="text-sm font-bold text-white">Distance (m)</span>
+                        <div className="bg-white/5 border border-white/10 rounded-xl px-4 py-3 min-w-[120px] flex justify-end shadow-inner">
+                          <input
+                            type="text"
+                            value={distance}
+                            onChange={(e) => {
+                              const val = parseInt(e.target.value.replace(/\D/g, ''));
+                              if (!isNaN(val)) setDistance(val);
+                            }}
+                            className="bg-transparent text-right text-white font-bold text-base outline-none w-full"
                           />
-                          <div className="absolute left-0 right-0 top-6 flex justify-between px-0.5">
-                             <span className="text-[10px] font-bold text-muted-foreground">100 m</span>
-                             <span className="text-[10px] font-bold text-muted-foreground">100K m</span>
-                             <span className="text-[10px] font-bold text-muted-foreground">1M m</span>
-                             <span className="text-[10px] font-bold text-muted-foreground">20M m</span>
-                          </div>
-                       </div>
+                        </div>
+                      </div>
+
+                      <div className="relative pt-1 pb-6 px-1">
+                        <input
+                          type="range"
+                          min="4.6"
+                          max="16.8"
+                          step="0.01"
+                          value={Math.log(distance)}
+                          onChange={(e) => setDistance(Math.round(Math.exp(parseFloat(e.target.value))))}
+                          className="w-full h-1.5 bg-white/10 rounded-full appearance-none cursor-pointer accent-primary"
+                          style={{
+                            background: `linear-gradient(to right, var(--primary) 0%, var(--primary) ${((Math.log(distance) - 4.6) / (16.8 - 4.6)) * 100}%, rgba(255,255,255,0.1) ${((Math.log(distance) - 4.6) / (16.8 - 4.6)) * 100}%, rgba(255,255,255,0.1) 100%)`
+                          }}
+                        />
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -898,7 +1109,7 @@ const MapPoster = () => {
                 <div className="p-6 pb-4 border-b border-white/5">
                   <div className="flex items-center justify-between mb-1">
                     <h2 className="text-sm font-bold tracking-[0.1em] text-white uppercase">MARKERS</h2>
-                    <button 
+                    <button
                       onClick={handleAddMarker}
                       className="px-3 py-1.5 bg-primary text-black rounded-lg text-[10px] font-black tracking-widest hover:opacity-90 transition-all uppercase"
                     >
@@ -924,8 +1135,8 @@ const MapPoster = () => {
                             <MarkerIcon className="w-4 h-4" />
                           </div>
                           <div>
-                            <input 
-                              type="text" 
+                            <input
+                              type="text"
                               value={marker.name}
                               onChange={(e) => {
                                 setMarkers(markers.map(m => m.id === marker.id ? { ...m, name: e.target.value.toUpperCase() } : m));
@@ -937,7 +1148,7 @@ const MapPoster = () => {
                             </p>
                           </div>
                         </div>
-                        <button 
+                        <button
                           onClick={() => handleRemoveMarker(marker.id)}
                           className="p-1.5 opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-red-400 transition-all"
                         >
@@ -964,58 +1175,82 @@ const MapPoster = () => {
                     <h3 className="text-[10px] font-black tracking-[0.2em] text-primary uppercase">VIEW CONTROLS</h3>
                     <div className="flex items-center justify-between">
                       <span className="text-sm font-medium text-white">Map Lock</span>
-                      <button 
+                      <button
                         onClick={() => setIsMapLocked(!isMapLocked)}
-                        className={`relative w-12 h-6 rounded-full transition-colors duration-300 ${
-                          isMapLocked ? 'bg-primary' : 'bg-white/10'
-                        }`}
+                        className={`relative w-12 h-6 rounded-full transition-colors duration-300 ${isMapLocked ? 'bg-primary' : 'bg-white/10'
+                          }`}
                       >
-                        <div className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow-md transition-transform duration-300 ${
-                          isMapLocked ? 'translate-x-6' : 'translate-x-0.5'
-                        }`} />
+                        <div className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow-md transition-transform duration-300 ${isMapLocked ? 'translate-x-6' : 'translate-x-0.5'
+                          }`} />
                       </button>
                     </div>
                     <div className="flex items-center justify-between">
                       <span className="text-sm font-medium text-white">Allow Rotation</span>
-                      <button 
+                      <button
                         onClick={() => setIsRotationEnabled(!isRotationEnabled)}
-                        className={`relative w-12 h-6 rounded-full transition-colors duration-300 ${
-                          isRotationEnabled ? 'bg-primary' : 'bg-white/10'
-                        }`}
+                        className={`relative w-12 h-6 rounded-full transition-colors duration-300 ${isRotationEnabled ? 'bg-primary' : 'bg-white/10'
+                          }`}
                       >
-                        <div className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow-md transition-transform duration-300 ${
-                          isRotationEnabled ? 'translate-x-6' : 'translate-x-0.5'
-                        }`} />
+                        <div className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow-md transition-transform duration-300 ${isRotationEnabled ? 'translate-x-6' : 'translate-x-0.5'
+                          }`} />
                       </button>
                     </div>
+
+                    {isRotationEnabled && (
+                      <div className="space-y-4 pt-4 border-t border-white/5 animate-in fade-in slide-in-from-top-2 duration-300">
+                        <div className="flex items-center justify-between">
+                          <h4 className="text-[10px] font-bold text-white uppercase tracking-wider">Map Rotation</h4>
+                          <span className="text-[10px] font-mono text-primary bg-primary/10 px-1.5 py-0.5 rounded">
+                            {Math.round(bearing)}°
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-4">
+                          <input
+                            type="range"
+                            min="0"
+                            max="360"
+                            step="1"
+                            value={bearing}
+                            onChange={(e) => setBearing(parseFloat(e.target.value))}
+                            className="flex-1 h-1.5 bg-white/10 rounded-full appearance-none cursor-pointer accent-primary"
+                            style={{
+                              background: `linear-gradient(to right, var(--primary) 0%, var(--primary) ${(bearing / 360) * 100}%, rgba(255,255,255,0.1) ${(bearing / 360) * 100}%, rgba(255,255,255,0.1) 100%)`
+                            }}
+                          />
+                          <button
+                            onClick={() => setBearing(0)}
+                            className="p-1.5 bg-white/5 hover:bg-white/10 rounded border border-white/10 text-muted-foreground hover:text-white transition-colors"
+                            title="Reset Heading"
+                          >
+                            <RefreshCw className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   <div className="space-y-4 pt-6 border-t border-white/5">
                     <h3 className="text-[10px] font-black tracking-[0.2em] text-primary uppercase">POSTER DECORATIONS</h3>
                     <div className="flex items-center justify-between">
                       <span className="text-sm font-medium text-white">Show Text</span>
-                      <button 
+                      <button
                         onClick={() => setShowPosterText(!showPosterText)}
-                        className={`relative w-12 h-6 rounded-full transition-colors duration-300 ${
-                          showPosterText ? 'bg-primary' : 'bg-white/10'
-                        }`}
+                        className={`relative w-12 h-6 rounded-full transition-colors duration-300 ${showPosterText ? 'bg-primary' : 'bg-white/10'
+                          }`}
                       >
-                        <div className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow-md transition-transform duration-300 ${
-                          showPosterText ? 'translate-x-6' : 'translate-x-0.5'
-                        }`} />
+                        <div className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow-md transition-transform duration-300 ${showPosterText ? 'translate-x-6' : 'translate-x-0.5'
+                          }`} />
                       </button>
                     </div>
                     <div className="flex items-center justify-between">
                       <span className="text-sm font-medium text-white">Background Overlay</span>
-                      <button 
+                      <button
                         onClick={() => setShowOverlay(!showOverlay)}
-                        className={`relative w-12 h-6 rounded-full transition-colors duration-300 ${
-                          showOverlay ? 'bg-primary' : 'bg-white/10'
-                        }`}
+                        className={`relative w-12 h-6 rounded-full transition-colors duration-300 ${showOverlay ? 'bg-primary' : 'bg-white/10'
+                          }`}
                       >
-                        <div className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow-md transition-transform duration-300 ${
-                          showOverlay ? 'translate-x-6' : 'translate-x-0.5'
-                        }`} />
+                        <div className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow-md transition-transform duration-300 ${showOverlay ? 'translate-x-6' : 'translate-x-0.5'
+                          }`} />
                       </button>
                     </div>
                   </div>
@@ -1027,89 +1262,108 @@ const MapPoster = () => {
               <div className="p-6">
                 <h2 className="text-sm font-bold tracking-[0.1em] text-white uppercase mb-4">Saved Locations</h2>
                 <div className="space-y-4">
-                   <div className="p-4 rounded-xl border border-white/5 bg-white/[0.02] flex items-center justify-between group hover:bg-white/[0.05] transition-colors cursor-pointer">
-                      <div className="flex items-center gap-3">
-                         <div className="p-2 rounded bg-primary/10 text-primary">
-                            <MapPin className="w-4 h-4" />
-                         </div>
-                         <div>
-                            <p className="text-xs font-bold text-white uppercase">Current View</p>
-                            <p className="text-[10px] text-muted-foreground">{locName}, {locCountry}</p>
-                         </div>
+                  <div className="p-4 rounded-xl border border-white/5 bg-white/[0.02] flex items-center justify-between group hover:bg-white/[0.05] transition-colors cursor-pointer">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 rounded bg-primary/10 text-primary">
+                        <MapPin className="w-4 h-4" />
                       </div>
-                   </div>
+                      <div>
+                        <p className="text-xs font-bold text-white uppercase">Current View</p>
+                        <p className="text-[10px] text-muted-foreground">{locName}, {locCountry}</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="mt-8 pt-6 border-t border-white/5">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h3 className="text-[10px] font-black tracking-[0.2em] text-primary uppercase mb-1">DYNAMIC NAMING</h3>
+                        <p className="text-[10px] text-muted-foreground uppercase">Update labels as you move</p>
+                      </div>
+                      <button
+                        onClick={() => setIsAutoLocation(!isAutoLocation)}
+                        className={`relative w-12 h-6 rounded-full transition-colors duration-300 ${isAutoLocation ? 'bg-primary' : 'bg-white/10'
+                          }`}
+                      >
+                        <div className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow-md transition-transform duration-300 ${isAutoLocation ? 'translate-x-6' : 'translate-x-0.5'
+                          }`} />
+                      </button>
+                    </div>
+
+                  </div>
                 </div>
               </div>
             )}
           </div>
         </aside>
 
-        <main className="flex-1 relative w-full h-full flex flex-col items-center justify-center p-6">
-          <div className="absolute top-6 right-6 z-30 bg-background/90 backdrop-blur-md border border-border rounded-lg p-5 w-64 shadow-xl">
-            <h3 className="text-xs font-bold tracking-[0.2em] mb-4 text-foreground">CURRENT SETTINGS</h3>
-            <div className="grid grid-cols-2 gap-y-4 gap-x-2 text-xs">
-              <div>
-                <p className="text-muted-foreground uppercase text-[10px] tracking-wider mb-1">LOCATION</p>
-                <p className="text-foreground truncate font-medium">{locName}, {locCountry.charAt(0) + locCountry.slice(1).toLowerCase()}</p>
-              </div>
-              <div>
-                <p className="text-muted-foreground uppercase text-[10px] tracking-wider mb-1">THEME</p>
-                <p className="text-foreground font-medium">{selectedTheme.name}</p>
-              </div>
-              <div>
-                <p className="text-muted-foreground uppercase text-[10px] tracking-wider mb-1">LAYOUT</p>
-                <p className="text-foreground font-medium truncate uppercase">{selectedLayout.name}</p>
-              </div>
-              <div>
-                <p className="text-muted-foreground uppercase text-[10px] tracking-wider mb-1">ASPECT RATIO</p>
-                <p className="text-foreground font-medium">
-                  {selectedLayout.aspect < 1 
-                    ? `1:${(1/selectedLayout.aspect).toFixed(2)}` 
-                    : `${selectedLayout.aspect.toFixed(2)}:1`}
-                </p>
-              </div>
-              <div>
-                <p className="text-muted-foreground uppercase text-[10px] tracking-wider mb-1">MARKERS</p>
-                <p className="text-foreground font-medium">0 markers</p>
-              </div>
-              <div>
-                <p className="text-muted-foreground uppercase text-[10px] tracking-wider mb-1">COORDINATES</p>
-                <p className="text-foreground font-medium">{mapCenter[1].toFixed(4)}, {mapCenter[0].toFixed(4)}</p>
-              </div>
+        <main className="flex-1 relative w-full h-full flex flex-col items-center justify-center p-3 md:p-6 pb-20 md:pb-6">
+          {/* Synchronized Background Map */}
+          <div className="absolute inset-0 z-0 pointer-events-none overflow-hidden grayscale-[0.3] opacity-40 bg-[#050810]">
+            <div className="absolute inset-0 blur-sm scale-110">
+              <Map
+                ref={bgMapRef}
+                theme="dark"
+                center={mapCenter}
+                zoom={zoom - 1} // Slightly zoomed out for context
+                bearing={bearing}
+                className="w-full h-full"
+                dragPan={false}
+                scrollZoom={false}
+                boxZoom={false}
+                dragRotate={false}
+                keyboard={false}
+                doubleClickZoom={false}
+                touchZoomRotate={false}
+              />
             </div>
+            <div className="absolute inset-0 bg-gradient-to-b from-[#050810]/40 via-transparent to-[#050810]/60" />
           </div>
-
           <div className="z-20 flex flex-col items-center gap-6 pb-12 w-full max-w-full overflow-hidden px-4">
-            <div 
-               className="relative shadow-[0_0_50px_rgba(0,0,0,0.5)] border overflow-hidden rounded-sm ring-1 ring-white/10 flex flex-col pointer-events-auto shrink transition-all duration-500 mx-auto"
-               style={{ 
-                  backgroundColor: currentColors['Land'], 
-                  borderColor: currentColors['Road Outline'],
-                  aspectRatio: selectedLayout.aspect,
-                  maxHeight: '70vh',
-                  maxWidth: '100%',
-                  height: selectedLayout.aspect > 1.2 ? 'auto' : '70vh',
-                  width: selectedLayout.aspect > 1.2 ? '100%' : 'auto'
-               }}
+            <div
+              ref={posterRef}
+              className="relative shadow-[0_0_50px_rgba(0,0,0,0.5)] border overflow-hidden rounded-sm ring-1 ring-white/10 flex flex-col pointer-events-auto shrink transition-all duration-500 mx-auto"
+              style={{
+                backgroundColor: currentColors['Land'],
+                borderColor: currentColors['Road Outline'],
+                aspectRatio: selectedLayout.aspect,
+                maxHeight: '70vh',
+                maxWidth: '100%',
+                height: selectedLayout.aspect > 1.2 ? 'auto' : '70vh',
+                width: selectedLayout.aspect > 1.2 ? '100%' : 'auto'
+              }}
             >
-              <div className="absolute inset-0" style={{ backgroundColor: currentColors['Land'] }}>
+              <div id="map-capture-layer" className="absolute inset-0">
                 <Map
                   ref={mapRef}
                   theme="dark"
                   center={mapCenter}
                   zoom={zoom}
-                  className="w-full h-full opacity-80"
+                  bearing={bearing}
+                  onViewportChange={(v) => {
+                    setMapCenter(v.center);
+                    setZoom(v.zoom);
+                    if (v.bearing !== undefined) setBearing(v.bearing);
+                  }}
+                  className="w-full h-full"
+                  dragPan={!isMapLocked}
+                  scrollZoom={!isMapLocked}
+                  boxZoom={!isMapLocked}
+                  dragRotate={!isMapLocked && isRotationEnabled}
+                  keyboard={!isMapLocked}
+                  doubleClickZoom={!isMapLocked}
+                  touchZoomRotate={!isMapLocked}
                 />
               </div>
 
               {showOverlay && (
                 <>
-                  <div 
-                    className="absolute top-0 left-0 right-0 h-32 z-10 pointer-events-none transition-opacity duration-500" 
+                  <div
+                    className="absolute top-0 left-0 right-0 h-32 z-10 pointer-events-none transition-opacity duration-500"
                     style={{ background: `linear-gradient(to bottom, ${currentColors['Overlay']}, ${currentColors['Overlay']}99, transparent)` }}
                   />
-                  <div 
-                    className="absolute bottom-0 left-0 right-0 h-48 z-10 pointer-events-none transition-opacity duration-500" 
+                  <div
+                    className="absolute bottom-0 left-0 right-0 h-48 z-10 pointer-events-none transition-opacity duration-500"
                     style={{ background: `linear-gradient(to top, ${currentColors['Overlay']}, ${currentColors['Overlay']}cc, transparent)` }}
                   />
                 </>
@@ -1117,38 +1371,37 @@ const MapPoster = () => {
 
               {showPosterText && (
                 <div className="absolute bottom-12 left-0 w-full flex flex-col items-center justify-center z-20 pointer-events-none">
-                  <h2 
+                  <h2
                     className="text-3xl sm:text-4xl leading-none font-bold tracking-[0.25em] mb-4 text-center mx-4"
                     style={{ color: currentColors['Text'], fontFamily: selectedFont }}
+                    suppressHydrationWarning
                   >
                     {locName}
                   </h2>
-                  
-                  <div 
-                    className="w-48 h-px mb-3 block" 
-                    style={{ backgroundColor: `${currentColors['Text']}80` }}
-                  />
-                  
-                  <p 
-                    className="text-lg font-medium tracking-[0.4em] mb-3"
-                    style={{ color: currentColors['Text'], fontFamily: selectedFont }}
+
+                  <p
+                    className="text-sm sm:text-base font-black tracking-[0.6em] text-center opacity-80 mb-3"
+                    style={{ color: currentColors['Text'] }}
+                    suppressHydrationWarning
                   >
                     {locCountry}
                   </p>
-                  
-                  <p 
+
+                  <p
                     className="text-[10px] tracking-[0.2em] font-mono"
                     style={{ color: `${currentColors['Text']}b3` }}
+                    suppressHydrationWarning
                   >
                     {Math.abs(mapCenter[1]).toFixed(4)}° {mapCenter[1] >= 0 ? 'N' : 'S'} / {Math.abs(mapCenter[0]).toFixed(4)}° {mapCenter[0] >= 0 ? 'E' : 'W'}
                   </p>
                 </div>
               )}
+
             </div>
 
             {!isMapLocked && (
               <div className="flex items-center gap-4 px-4 py-2 bg-background/80 backdrop-blur-xl border border-white/10 rounded-xl shadow-2xl animate-in fade-in slide-in-from-bottom-4 duration-300">
-                <button 
+                <button
                   onClick={() => setIsMapLocked(true)}
                   className="flex items-center gap-2 px-4 py-2 bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 rounded-lg text-xs font-bold transition-all transition-colors uppercase"
                 >
@@ -1158,13 +1411,12 @@ const MapPoster = () => {
 
                 <div className="w-px h-6 bg-white/10" />
 
-                <button 
+                <button
                   onClick={() => setIsRotationEnabled(!isRotationEnabled)}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all uppercase ${
-                    isRotationEnabled 
-                      ? 'bg-primary text-black' 
+                  className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all uppercase ${isRotationEnabled
+                      ? 'bg-primary text-black'
                       : 'bg-white/5 hover:bg-white/10 text-white border border-white/10'
-                  }`}
+                    }`}
                 >
                   <RefreshCw className={`w-3.5 h-3.5 ${isRotationEnabled ? 'animate-spin-slow' : ''}`} />
                   {isRotationEnabled ? 'Disable Rotation' : 'Enable Rotation'}
@@ -1173,17 +1425,17 @@ const MapPoster = () => {
                 <div className="w-px h-6 bg-white/10" />
 
                 <div className="flex items-center gap-3 px-2">
-                  <button 
+                  <button
                     onClick={() => mapRef.current?.zoomTo(zoom - 0.5)}
                     className="p-1.5 hover:bg-white/10 rounded-md text-white transition-colors"
                   >
                     <Search className="w-4 h-4" />
                   </button>
-                  
-                  <input 
-                    type="range" 
-                    min="1" 
-                    max="20" 
+
+                  <input
+                    type="range"
+                    min="1"
+                    max="20"
                     step="0.1"
                     value={zoom}
                     onChange={(e) => {
@@ -1194,7 +1446,7 @@ const MapPoster = () => {
                     className="w-32 h-1.5 bg-white/10 rounded-full appearance-none cursor-pointer accent-primary"
                   />
 
-                  <button 
+                  <button
                     onClick={() => mapRef.current?.zoomTo(zoom + 0.5)}
                     className="p-1.5 hover:bg-white/10 rounded-md text-white transition-colors"
                   >
@@ -1205,36 +1457,127 @@ const MapPoster = () => {
             )}
 
             {/* Bottom Actions under the Poster */}
-            <div className="flex items-center gap-4 shrink-0 transition-opacity">
-               <button onClick={handleRecenter} className="flex items-center gap-2 px-6 py-3 bg-background/90 backdrop-blur-md hover:bg-secondary hover:text-primary rounded-full border border-border font-medium text-sm text-foreground shadow-xl transition-colors w-40 justify-center">
-                  <Crosshair className="w-4 h-4" />
-                  Recenter
-               </button>
-               <button 
-                  onClick={() => setIsMapLocked(!isMapLocked)}
-                  className={`flex items-center gap-2 px-6 py-3 rounded-full border font-medium text-sm shadow-xl transition-all w-40 justify-center ${
-                    isMapLocked 
-                      ? 'bg-primary text-black border-transparent hover:opacity-90' 
-                      : 'bg-background/90 text-foreground border-border hover:bg-secondary hover:text-primary'
+            <div className="flex items-center gap-3 shrink-0 transition-opacity">
+              <button onClick={handleRecenter} className="flex items-center gap-2 px-4 md:px-6 py-2.5 md:py-3 bg-background/90 backdrop-blur-md hover:bg-secondary hover:text-primary rounded-full border border-border font-medium text-xs md:text-sm text-foreground shadow-xl transition-colors justify-center">
+                <Crosshair className="w-4 h-4" />
+                <span className="hidden sm:inline">Recenter</span>
+              </button>
+              <button
+                onClick={() => setIsMapLocked(!isMapLocked)}
+                className={`flex items-center gap-2 px-4 md:px-6 py-2.5 md:py-3 rounded-full border font-medium text-xs md:text-sm shadow-xl transition-all justify-center ${isMapLocked
+                    ? 'bg-primary text-black border-transparent hover:opacity-90'
+                    : 'bg-background/90 text-foreground border-border hover:bg-secondary hover:text-primary'
                   }`}
-               >
-                  {isMapLocked ? <Brush className="w-4 h-4" /> : <LockIcon className="w-4 h-4" />}
-                  {isMapLocked ? 'Edit Map' : 'Lock Map'}
-               </button>
+              >
+                {isMapLocked ? <Brush className="w-4 h-4" /> : <LockIcon className="w-4 h-4" />}
+                {isMapLocked ? 'Edit Map' : 'Lock Map'}
+              </button>
             </div>
           </div>
 
-          {/* Floating Bottom Right Action */}
-          <div className="absolute bottom-8 right-8 z-30">
-            <button className="flex items-center gap-2 px-6 py-3 bg-white hover:bg-gray-100 rounded text-black font-bold tracking-wider text-sm shadow-xl transition-all hover:scale-105 active:scale-95">
-              <Download className="w-4 h-4" />
-              DOWNLOAD
+          {/* Floating Bottom Right — desktop only */}
+          <div className="hidden md:block absolute bottom-8 right-8 z-30">
+            <button
+              onClick={handleDownload}
+              disabled={exportLoading}
+              className={`flex items-center gap-3 px-8 py-4 bg-white hover:bg-gray-100 rounded-lg text-black font-black tracking-[0.15em] text-xs shadow-2xl transition-all hover:scale-105 active:scale-95 disabled:opacity-50 disabled:pointer-events-none group`}
+            >
+              {exportLoading ? (
+                <RefreshCw className="w-4 h-4 animate-spin text-primary" />
+              ) : (
+                <Download className="w-4 h-4 group-hover:translate-y-0.5 transition-transform" />
+              )}
+              {exportLoading ? 'GENERATING...' : 'DOWNLOAD POSTER'}
             </button>
           </div>
 
-          {/* Footer removed per user request */}
+          {/* Credits Footer — desktop only */}
+          <footer className="hidden md:block mt-auto py-6 w-full text-center z-10 opacity-30 hover:opacity-100 transition-opacity duration-500">
+            <p className="text-[10px] font-mono tracking-[0.3em] text-white uppercase flex items-center justify-center gap-2">
+              © 2026 All Rights Reserved <span className="opacity-30">|</span> Made with <span className="text-red-500 animate-pulse">❤️</span> by Kanishk Kumar Singh
+            </p>
+          </footer>
+
+          {/* Mobile bottom tab bar */}
+          <div className="md:hidden fixed bottom-0 left-0 right-0 z-30 bg-background/95 backdrop-blur-xl border-t border-border flex items-center justify-around px-2 py-2 safe-area-pb">
+            {tabs.map((tab) => {
+              const Icon = tab.icon;
+              const isActive = activeTab === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => {
+                    setActiveTab(activeTab === tab.id ? '' : tab.id);
+                    if (tab.id !== 'theme') setIsEditorOpen(false);
+                  }}
+                  className={`flex flex-col items-center gap-1 px-3 py-1.5 rounded-xl transition-colors ${isActive ? 'text-primary bg-primary/10' : 'text-muted-foreground'}`}
+                >
+                  <Icon className="w-5 h-5" strokeWidth={isActive ? 2.5 : 1.5} />
+                  <span className="text-[8px] font-bold tracking-wider">{tab.label}</span>
+                </button>
+              );
+            })}
+          </div>
         </main>
       </div>
+      <ExportProgress 
+        isVisible={exportLoading} 
+        progress={exportProgress} 
+        status={exportStatus} 
+      />
+
+      {/* Preview Dialog */}
+      {previewDataUrl && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 backdrop-blur-xl animate-in fade-in duration-300">
+          <div className="flex flex-col bg-[#0a0f18] border border-white/10 rounded-2xl shadow-2xl overflow-hidden max-w-2xl w-full mx-6 animate-in zoom-in-95 slide-in-from-bottom-4 duration-300">
+            {/* Header */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-white/5">
+              <div>
+                <p className="text-xs font-black tracking-[0.3em] text-white uppercase">Preview</p>
+                <p className="text-[10px] text-muted-foreground font-mono mt-0.5">{previewFilename}</p>
+              </div>
+              <button
+                onClick={() => setPreviewDataUrl(null)}
+                className="p-2 hover:bg-white/10 rounded-lg text-muted-foreground hover:text-white transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Image Preview */}
+            <div className="p-4 bg-[#050810]">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={previewDataUrl}
+                alt="Map poster preview"
+                className="w-full rounded-lg object-contain max-h-[60vh]"
+              />
+            </div>
+
+            {/* Actions */}
+            <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-white/5">
+              <button
+                onClick={() => setPreviewDataUrl(null)}
+                className="px-5 py-2.5 text-xs font-bold tracking-wider rounded-lg border border-white/10 hover:bg-white/5 text-muted-foreground transition-colors uppercase"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  const link = document.createElement('a');
+                  link.download = previewFilename;
+                  link.href = previewDataUrl;
+                  link.click();
+                }}
+                className="flex items-center gap-2 px-6 py-2.5 bg-white hover:bg-gray-100 rounded-lg text-black font-black tracking-[0.15em] text-xs shadow-lg transition-all hover:scale-105 active:scale-95"
+              >
+                <Download className="w-4 h-4" />
+                DOWNLOAD
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

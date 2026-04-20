@@ -42,7 +42,7 @@ export default function RootLayout({
       <head>
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-        <link href={GOOGLE_FONTS_URL} rel="stylesheet" />
+        <link href={GOOGLE_FONTS_URL} rel="stylesheet" crossOrigin="anonymous" />
       </head>
       <body className={`${geist.className} antialiased bg-background text-foreground`}>
         {children}

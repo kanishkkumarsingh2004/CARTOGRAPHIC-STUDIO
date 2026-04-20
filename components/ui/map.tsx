@@ -142,7 +142,17 @@ type MapProps = {
   onViewportChange?: (viewport: MapViewport) => void;
   /** Show a loading indicator on the map */
   loading?: boolean;
-} & Omit<MapLibreGL.MapOptions, "container" | "style">;
+  /** Enable preserveDrawingBuffer for screenshot/export support */
+  preserveDrawingBuffer?: boolean;
+  /** Center coordinates [longitude, latitude] */
+  center?: [number, number];
+  /** Zoom level */
+  zoom?: number;
+  /** Bearing (rotation) in degrees */
+  bearing?: number;
+  /** Pitch (tilt) in degrees */
+  pitch?: number;
+} & Omit<MapLibreGL.MapOptions, "container" | "style" | "center" | "zoom" | "bearing" | "pitch">;
 
 function DefaultLoader() {
   return (
@@ -225,6 +235,13 @@ const Map = forwardRef<MapRef, MapProps>(function Map(
       style: initialStyle,
       renderWorldCopies: false,
       attributionControl: false,
+      preserveDrawingBuffer: true,
+      transformRequest: (url) => {
+        // Route through our same-origin proxy — tiles served from same origin
+        // prevent the WebGL canvas from being CORS-tainted
+        const proxied = `${window.location.origin}/api/tiles?url=${encodeURIComponent(url)}`;
+        return { url: proxied, credentials: 'same-origin' as const };
+      },
       ...props,
       ...viewport,
     });
@@ -294,6 +311,56 @@ const Map = forwardRef<MapRef, MapProps>(function Map(
     mapInstance.jumpTo(next);
     internalUpdateRef.current = false;
   }, [mapInstance, isControlled, viewport]);
+  
+  // Sync individual props to map
+  useEffect(() => {
+    if (!mapInstance || internalUpdateRef.current) return;
+    
+    if (props.center) {
+      const current = mapInstance.getCenter();
+      if (props.center[0] !== current.lng || props.center[1] !== current.lat) {
+        internalUpdateRef.current = true;
+        mapInstance.setCenter(props.center);
+        internalUpdateRef.current = false;
+      }
+    }
+  }, [mapInstance, props.center]);
+
+  useEffect(() => {
+    if (!mapInstance || internalUpdateRef.current) return;
+    
+    if (props.zoom !== undefined) {
+      if (mapInstance.getZoom() !== props.zoom) {
+        internalUpdateRef.current = true;
+        mapInstance.setZoom(props.zoom);
+        internalUpdateRef.current = false;
+      }
+    }
+  }, [mapInstance, props.zoom]);
+
+  useEffect(() => {
+    if (!mapInstance || internalUpdateRef.current) return;
+    
+    if (props.bearing !== undefined) {
+      if (mapInstance.getBearing() !== props.bearing) {
+        internalUpdateRef.current = true;
+        mapInstance.setBearing(props.bearing);
+        internalUpdateRef.current = false;
+      }
+    }
+  }, [mapInstance, props.bearing]);
+
+  useEffect(() => {
+    if (!mapInstance || internalUpdateRef.current) return;
+    
+    if (props.pitch !== undefined) {
+      if (mapInstance.getPitch() !== props.pitch) {
+        internalUpdateRef.current = true;
+        mapInstance.setPitch(props.pitch);
+        internalUpdateRef.current = false;
+      }
+    }
+  }, [mapInstance, props.pitch]);
 
   // Handle style change
   useEffect(() => {
@@ -310,6 +377,36 @@ const Map = forwardRef<MapRef, MapProps>(function Map(
 
     mapInstance.setStyle(newStyle, { diff: true });
   }, [mapInstance, resolvedTheme, mapStyles, clearStyleTimeout]);
+  
+  // Sync interactivity props
+  useEffect(() => {
+    if (!mapInstance) return;
+
+    const controls = {
+      dragPan: props.dragPan,
+      scrollZoom: props.scrollZoom,
+      boxZoom: props.boxZoom,
+      dragRotate: props.dragRotate,
+      keyboard: props.keyboard,
+      doubleClickZoom: props.doubleClickZoom,
+      touchZoomRotate: props.touchZoomRotate,
+    };
+
+    Object.entries(controls).forEach(([control, enabled]) => {
+      if (enabled === undefined) return;
+      
+      const mapControl = (mapInstance as any)[control];
+      if (mapControl) {
+        if (enabled) mapControl.enable();
+        else mapControl.disable();
+      }
+    });
+  }, [
+    mapInstance, 
+    props.dragPan, props.scrollZoom, props.boxZoom, 
+    props.dragRotate, props.keyboard, props.doubleClickZoom, 
+    props.touchZoomRotate
+  ]);
 
   const contextValue = useMemo(
     () => ({
