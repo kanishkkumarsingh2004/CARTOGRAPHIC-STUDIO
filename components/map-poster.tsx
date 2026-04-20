@@ -35,13 +35,20 @@ const MapPoster = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchLoading, setSearchLoading] = useState(false);
   const [isTextManual, setIsTextManual] = useState(false);
+  const [isLayoutEditorOpen, setIsLayoutEditorOpen] = useState(false);
+  const [customAspectRatio, setCustomAspectRatio] = useState<number | null>(null);
+  const [ratioWidth, setRatioWidth] = useState(10);
+  const [ratioHeight, setRatioHeight] = useState(10);
+  const [pixelWidth, setPixelWidth] = useState(1080);
+  const [pixelHeight, setPixelHeight] = useState(1080);
 
   // Layer visibility toggles
   const [showLandcover, setShowLandcover] = useState(true);
   const [showBuildings, setShowBuildings] = useState(false);
   const [showWater, setShowWater] = useState(true);
   const [showParks, setShowParks] = useState(true);
-  const [showRoads, setShowRoads] = useState(true);
+  const [showMajorRoads, setShowMajorRoads] = useState(true);
+  const [showMinorRoads, setShowMinorRoads] = useState(true);
   const [showRail, setShowRail] = useState(true);
   const [showAeroway, setShowAeroway] = useState(true);
   const [showLabels, setShowLabels] = useState(false);
@@ -180,6 +187,70 @@ const MapPoster = () => {
 
   const [selectedLayoutId, setSelectedLayoutId] = useState('a4-portrait');
   const selectedLayout = layouts.find(l => l.id === selectedLayoutId) || layouts[3];
+  const currentLayoutAspect = customAspectRatio ?? selectedLayout.aspect;
+
+  const gcd = (a: number, b: number) => {
+    let x = Math.abs(a);
+    let y = Math.abs(b);
+    while (y) {
+      const t = y;
+      y = x % y;
+      x = t;
+    }
+    return x || 1;
+  };
+
+  const normalizeRatioPair = (numerator: number, denominator: number) => {
+    const n = Math.max(1, Math.round(numerator));
+    const d = Math.max(1, Math.round(denominator));
+    const divisor = gcd(n, d);
+    return [n / divisor, d / divisor] as const;
+  };
+
+  const makePixelValues = (aspect: number) => {
+    const base = 1080;
+    if (aspect >= 1) {
+      return [Math.max(1, Math.round(aspect * base)), base] as const;
+    }
+    return [base, Math.max(1, Math.round(base / aspect))] as const;
+  };
+
+  const syncFromAspect = (aspect: number) => {
+    const [rw, rh] = normalizeRatioPair(Math.round(aspect * 1000), 1000);
+    const [pw, ph] = makePixelValues(aspect);
+    setCustomAspectRatio(aspect);
+    setRatioWidth(rw);
+    setRatioHeight(rh);
+    setPixelWidth(pw);
+    setPixelHeight(ph);
+  };
+
+  const syncFromRatioFields = (width: number, height: number) => {
+    if (width <= 0 || height <= 0) return;
+    const [rw, rh] = normalizeRatioPair(width, height);
+    const aspect = rw / rh;
+    const [pw, ph] = makePixelValues(aspect);
+    setCustomAspectRatio(aspect);
+    setRatioWidth(rw);
+    setRatioHeight(rh);
+    setPixelWidth(pw);
+    setPixelHeight(ph);
+  };
+
+  const syncFromPixelFields = (width: number, height: number) => {
+    if (width <= 0 || height <= 0) return;
+    const aspect = width / height;
+    const [rw, rh] = normalizeRatioPair(width, height);
+    setCustomAspectRatio(aspect);
+    setRatioWidth(rw);
+    setRatioHeight(rh);
+    setPixelWidth(width);
+    setPixelHeight(height);
+  };
+
+  useEffect(() => {
+    syncFromAspect(currentLayoutAspect);
+  }, [selectedLayoutId, currentLayoutAspect]);
 
   const [isMapLocked, setIsMapLocked] = useState(true);
   const [isRotationEnabled, setIsRotationEnabled] = useState(false);
@@ -227,20 +298,20 @@ const MapPoster = () => {
       'water': showWater,
       'park': showParks,
       'greenery': showParks,
-      'road': showRoads,
-      'motorway': showRoads,
-      'trunk': showRoads,
-      'primary': showRoads,
-      'secondary': showRoads,
-      'tertiary': showRoads,
-      'residential': showRoads,
-      'street': showRoads,
-      'service': showRoads,
-      'path': showRoads,
-      'track': showRoads,
-      'pedestrian': showRoads,
-      'footway': showRoads,
-      'cycleway': showRoads,
+      'road': showMajorRoads || showMinorRoads,
+      'motorway': showMajorRoads,
+      'trunk': showMajorRoads,
+      'primary': showMajorRoads,
+      'secondary': showMajorRoads,
+      'tertiary': showMinorRoads,
+      'residential': showMinorRoads,
+      'street': showMinorRoads,
+      'service': showMinorRoads,
+      'path': showMinorRoads,
+      'track': showMinorRoads,
+      'pedestrian': showMinorRoads,
+      'footway': showMinorRoads,
+      'cycleway': showMinorRoads,
       'railway': showRail,
       'rail': showRail,
       'aeroway': showAeroway,
@@ -301,14 +372,21 @@ const MapPoster = () => {
           }
 
           let appliedColor = '';
+          let roadCategory = ''; // Track if this is a major or minor road
           Object.entries(layerMapping).forEach(([label, config]) => {
             if (config.patterns.some(p => layerIdLower.includes(p) || sourceLayerLower.includes(p))) {
               appliedColor = currentColors[label];
+              if (label === 'Roads Major') {
+                roadCategory = 'major';
+              } else if (label.startsWith('Roads ')) {
+                roadCategory = 'minor';
+              }
             }
           });
 
           if (!appliedColor && infraPatterns.some(ip => layerIdLower.includes(ip) || sourceLayerLower.includes(ip))) {
             appliedColor = currentColors['Roads Minor Mid'];
+            roadCategory = 'minor';
           }
 
           if (appliedColor) {
@@ -316,9 +394,15 @@ const MapPoster = () => {
               const prop = l.type === 'fill' ? 'fill-color' : l.type === 'line' ? 'line-color' : l.type === 'background' ? 'background-color' : '';
               if (prop) map.setPaintProperty(l.id, prop, appliedColor);
 
-              const visibilityKey = Object.keys(layerVisibilityProps).find(k => layerIdLower.includes(k));
-              if (visibilityKey) {
-                map.setLayoutProperty(l.id, 'visibility', (layerVisibilityProps as any)[visibilityKey] ? 'visible' : 'none');
+              // Handle road visibility based on major/minor category
+              if (roadCategory) {
+                const shouldShow = roadCategory === 'major' ? showMajorRoads : showMinorRoads;
+                map.setLayoutProperty(l.id, 'visibility', shouldShow ? 'visible' : 'none');
+              } else {
+                const visibilityKey = Object.keys(layerVisibilityProps).find(k => layerIdLower.includes(k));
+                if (visibilityKey) {
+                  map.setLayoutProperty(l.id, 'visibility', (layerVisibilityProps as any)[visibilityKey] ? 'visible' : 'none');
+                }
               }
 
               if (l.type === 'line' && (isDetailLayer || appliedColor.startsWith('Roads'))) {
@@ -350,7 +434,7 @@ const MapPoster = () => {
     };
   }, [
     currentColors, showLandcover, showBuildings, showWater,
-    showParks, showRoads, showRail, showAeroway, showLabels, mapRef, bgMapRef, detailLevel, isMounted
+    showParks, showMajorRoads, showMinorRoads, showRail, showAeroway, showLabels, mapRef, bgMapRef, detailLevel, isMounted
   ]);
 
   const handleMapMoveEnd = async (viewport: { center: [number, number]; zoom: number; bearing: number; pitch: number }) => {
@@ -635,6 +719,7 @@ const MapPoster = () => {
                   onClick={() => {
                     setActiveTab(activeTab === tab.id ? '' : tab.id);
                     if (tab.id !== 'theme') setIsEditorOpen(false);
+                    if (tab.id !== 'layout') setIsLayoutEditorOpen(false);
                   }}
                   className={`flex flex-col items-center gap-1.5 w-full relative transition-colors ${isActive ? 'text-primary' : 'text-muted-foreground hover:text-foreground'}`}
                 >
@@ -826,13 +911,119 @@ const MapPoster = () => {
                 <div className="p-6 pb-2 border-b border-white/5">
                   <div className="flex items-center justify-between mb-2">
                     <h2 className="text-sm font-bold tracking-[0.1em] text-white uppercase">LAYOUT: {selectedLayout.name}</h2>
-                    <button className="p-2 bg-white/5 hover:bg-white/10 rounded-lg text-white transition-colors border border-white/10">
+                    <button
+                      onClick={() => setIsLayoutEditorOpen(true)}
+                      className="p-2 bg-white/5 hover:bg-white/10 rounded-lg text-white transition-colors border border-white/10"
+                      title="Open aspect ratio editor"
+                    >
                       <Brush className="w-4 h-4" />
                     </button>
                   </div>
                   <p className="text-[11px] text-muted-foreground/80 leading-relaxed mb-4">
                     Default print ratio based on {selectedLayout.name.toLowerCase()}.
                   </p>
+                  {isLayoutEditorOpen && (
+                    <div className="rounded-2xl border border-white/10 bg-white/5 p-4 mb-4">
+                      <div className="flex items-center justify-between gap-4 mb-4">
+                        <div>
+                          <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-muted-foreground mb-1">Aspect Ratio Editor</p>
+                          <p className="text-[11px] text-white/80 leading-relaxed">
+                            Adjust the poster's aspect ratio manually or reset to your selected layout.
+                          </p>
+                        </div>
+                        <button
+                          onClick={() => setIsLayoutEditorOpen(false)}
+                          className="text-[11px] font-bold uppercase tracking-[0.3em] text-white/80 hover:text-white"
+                        >
+                          Close
+                        </button>
+                      </div>
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        <div className="grid gap-3">
+                          <div>
+                            <label className="text-[10px] font-bold uppercase tracking-[0.3em] text-muted-foreground mb-2 block">Aspect width</label>
+                            <input
+                              type="number"
+                              min="1"
+                              step="1"
+                              value={ratioWidth}
+                              onChange={(e) => {
+                                const value = parseInt(e.target.value, 10);
+                                if (!Number.isNaN(value) && value > 0) {
+                                  syncFromRatioFields(value, ratioHeight);
+                                }
+                              }}
+                              className="w-full bg-[#0b1321] border border-white/10 rounded-lg px-3 py-2.5 text-sm text-white focus:border-primary/50 focus:outline-none"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-[10px] font-bold uppercase tracking-[0.3em] text-muted-foreground mb-2 block">Aspect height</label>
+                            <input
+                              type="number"
+                              min="1"
+                              step="1"
+                              value={ratioHeight}
+                              onChange={(e) => {
+                                const value = parseInt(e.target.value, 10);
+                                if (!Number.isNaN(value) && value > 0) {
+                                  syncFromRatioFields(ratioWidth, value);
+                                }
+                              }}
+                              className="w-full bg-[#0b1321] border border-white/10 rounded-lg px-3 py-2.5 text-sm text-white focus:border-primary/50 focus:outline-none"
+                            />
+                          </div>
+                        </div>
+                        <div className="grid gap-3">
+                          <div>
+                            <label className="text-[10px] font-bold uppercase tracking-[0.3em] text-muted-foreground mb-2 block">Width (px)</label>
+                            <input
+                              type="number"
+                              min="1"
+                              step="1"
+                              value={pixelWidth}
+                              onChange={(e) => {
+                                const value = parseInt(e.target.value, 10);
+                                if (!Number.isNaN(value) && value > 0) {
+                                  syncFromPixelFields(value, pixelHeight);
+                                }
+                              }}
+                              className="w-full bg-[#0b1321] border border-white/10 rounded-lg px-3 py-2.5 text-sm text-white focus:border-primary/50 focus:outline-none"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-[10px] font-bold uppercase tracking-[0.3em] text-muted-foreground mb-2 block">Height (px)</label>
+                            <input
+                              type="number"
+                              min="1"
+                              step="1"
+                              value={pixelHeight}
+                              onChange={(e) => {
+                                const value = parseInt(e.target.value, 10);
+                                if (!Number.isNaN(value) && value > 0) {
+                                  syncFromPixelFields(pixelWidth, value);
+                                }
+                              }}
+                              className="w-full bg-[#0b1321] border border-white/10 rounded-lg px-3 py-2.5 text-sm text-white focus:border-primary/50 focus:outline-none"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                      <div className="mt-4 text-[11px] text-muted-foreground">
+                        Computed ratio: {currentLayoutAspect.toFixed(3)}
+                      </div>
+                      {customAspectRatio !== null && (
+                        <button
+                          onClick={() => {
+                            setCustomAspectRatio(null);
+                            syncFromAspect(selectedLayout.aspect);
+                          }}
+                          className="mt-4 px-3 py-2 text-[11px] font-bold uppercase tracking-[0.3em] rounded-lg border border-white/10 bg-white/5 hover:bg-white/10"
+                        >
+                          Reset to {selectedLayout.name}
+                        </button>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 <div className="flex-1 overflow-y-auto px-6 py-6 space-y-8 custom-scrollbar">
@@ -843,7 +1034,10 @@ const MapPoster = () => {
                         {layouts.filter(l => l.category === cat).map((layout) => (
                           <button
                             key={layout.id}
-                            onClick={() => setSelectedLayoutId(layout.id)}
+                            onClick={() => {
+                              setSelectedLayoutId(layout.id);
+                              setCustomAspectRatio(null);
+                            }}
                             className={`flex flex-col text-left rounded-xl border p-3 transition-all ${selectedLayoutId === layout.id
                                 ? 'border-primary/50 bg-primary/5 shadow-lg'
                                 : 'border-white/5 bg-white/[0.02] hover:bg-white/[0.05] hover:border-white/10'
@@ -851,9 +1045,6 @@ const MapPoster = () => {
                           >
                             <span className="text-[9px] font-bold text-white mb-0.5 uppercase tracking-tighter truncate w-full">
                               {layout.name}
-                            </span>
-                            <span className="text-[8px] text-muted-foreground mb-3 font-mono">
-                              {layout.dims}
                             </span>
 
                             <div className="mt-auto flex items-center justify-center h-20 w-full bg-[#1a1f2b] rounded-lg border border-white/5 overflow-hidden">
@@ -988,7 +1179,8 @@ const MapPoster = () => {
                     { label: 'Show buildings', state: showBuildings, setter: setShowBuildings },
                     { label: 'Show water', state: showWater, setter: setShowWater },
                     { label: 'Show parks', state: showParks, setter: setShowParks },
-                    { label: 'Show roads', state: showRoads, setter: setShowRoads },
+                    { label: 'Show major roads', state: showMajorRoads, setter: setShowMajorRoads },
+                    { label: 'Show minor roads', state: showMinorRoads, setter: setShowMinorRoads },
                     { label: 'Show rail', state: showRail, setter: setShowRail },
                     { label: 'Show aeroway', state: showAeroway, setter: setShowAeroway },
                     { label: 'Show labels', state: showLabels, setter: setShowLabels },
@@ -1302,8 +1494,8 @@ const MapPoster = () => {
               style={{
                 backgroundColor: currentColors['Land'],
                 borderColor: currentColors['Road Outline'],
-                aspectRatio: selectedLayout.aspect,
-                width: `min(90vw, calc(70vh * ${selectedLayout.aspect}))`,
+                aspectRatio: currentLayoutAspect,
+                width: `min(90vw, calc(70vh * ${currentLayoutAspect}))`,
                 maxWidth: '100%',
                 maxHeight: '70vh',
                 height: 'auto',
