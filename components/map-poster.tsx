@@ -1,7 +1,7 @@
 
 'use client';
 
-import React, { useState, useRef, useEffect, useMemo } from 'react';
+import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import {
   Download, MapPin, Palette, Layout as LayoutIcon, Brush,
   Layers, MapPin as MarkerIcon, Settings, Crosshair,
@@ -9,8 +9,151 @@ import {
 } from 'lucide-react';
 import { Map, MapMarker, MarkerContent } from '@/components/ui/map';
 import { ExportProgress } from '@/components/ui/export-progress';
-import { toPng } from 'html-to-image';
+import { toPng, toJpeg } from 'html-to-image';
 import { generateMapStyle, type MapStyleColors } from '@/lib/map-style';
+
+// Embeds DPI into a PNG data URL by writing a pHYs chunk (pixels per metre).
+// ppm = round(dpi / 0.0254)
+function embedPngDpi(dataUrl: string, dpi: number): string {
+  const base64 = dataUrl.split(',')[1];
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+
+  const ppm = Math.round(dpi / 0.0254);
+
+  // Build pHYs chunk: 4 bytes X ppm, 4 bytes Y ppm, 1 byte unit (1 = metre)
+  const physData = new Uint8Array(9);
+  const view = new DataView(physData.buffer);
+  view.setUint32(0, ppm, false);
+  view.setUint32(4, ppm, false);
+  physData[8] = 1;
+
+  const chunkType = new TextEncoder().encode('pHYs');
+  const chunkLen = new Uint8Array(4);
+  new DataView(chunkLen.buffer).setUint32(0, 9, false);
+
+  // CRC over type + data
+  const crcInput = new Uint8Array(13);
+  crcInput.set(chunkType, 0);
+  crcInput.set(physData, 4);
+  const crc = pngCrc32(crcInput);
+  const crcBytes = new Uint8Array(4);
+  new DataView(crcBytes.buffer).setUint32(0, crc, false);
+
+  const physChunk = new Uint8Array(4 + 4 + 9 + 4);
+  physChunk.set(chunkLen, 0);
+  physChunk.set(chunkType, 4);
+  physChunk.set(physData, 8);
+  physChunk.set(crcBytes, 17);
+
+  // Insert pHYs after the IHDR chunk (8 sig + 4 len + 4 type + 13 data + 4 crc = 33 bytes)
+  const insertAt = 33;
+  const result = new Uint8Array(bytes.length + physChunk.length);
+  result.set(bytes.slice(0, insertAt), 0);
+  result.set(physChunk, insertAt);
+  result.set(bytes.slice(insertAt), insertAt + physChunk.length);
+
+  let out = '';
+  for (let i = 0; i < result.length; i++) out += String.fromCharCode(result[i]);
+  return 'data:image/png;base64,' + btoa(out);
+}
+
+function pngCrc32(data: Uint8Array): number {
+  const table = new Uint32Array(256);
+  for (let i = 0; i < 256; i++) {
+    let c = i;
+    for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+    table[i] = c;
+  }
+  let crc = 0xffffffff;
+  for (let i = 0; i < data.length; i++) crc = table[(crc ^ data[i]) & 0xff] ^ (crc >>> 8);
+  return (crc ^ 0xffffffff) >>> 0;
+}
+
+// Renders markers as DOM elements inside the poster div so html-to-image captures them.
+// MapLibre's Marker uses createPortal outside posterRef, so we duplicate them here.
+const OVERZOOM_SCALE = 5.5;
+
+function PosterMarkerOverlay({
+  mapRef,
+  markers,
+  textColor,
+}: {
+  mapRef: React.RefObject<any>;
+  markers: { id: string; name: string; coords: [number, number] }[];
+  textColor: string;
+}) {
+  const [positions, setPositions] = useState<Record<string, { x: number; y: number }>>({});
+
+  const project = useCallback(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    const next: Record<string, { x: number; y: number }> = {};
+    for (const m of markers) {
+      const pt = map.project(m.coords);
+      // map.project() returns coords in the overzoom canvas space (5.5× poster size).
+      // Divide by OVERZOOM_SCALE to get poster-relative pixel positions.
+      next[m.id] = { x: pt.x / OVERZOOM_SCALE, y: pt.y / OVERZOOM_SCALE };
+    }
+    setPositions(next);
+  }, [mapRef, markers]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    project();
+    map.on('move', project);
+    map.on('zoom', project);
+    map.on('rotate', project);
+    return () => {
+      map.off('move', project);
+      map.off('zoom', project);
+      map.off('rotate', project);
+    };
+  }, [mapRef, project]);
+
+  if (markers.length === 0) return null;
+
+  return (
+    <div className="absolute inset-0 pointer-events-none overflow-hidden" style={{ zIndex: 25 }}>
+      {markers.map((m) => {
+        const pos = positions[m.id];
+        if (!pos) return null;
+        return (
+          // pos is the exact pin point — translate so the bottom of the stem sits at pos
+          <div
+            key={m.id}
+            className="absolute flex flex-col items-center"
+            style={{ left: pos.x, top: pos.y, transform: 'translate(-50%, -100%)' }}
+          >
+            {m.name.trim() && (
+              <div
+                className="text-[8px] font-bold tracking-wider mb-0.5 px-1 py-0.5 rounded whitespace-nowrap"
+                style={{ color: textColor, backgroundColor: `${textColor}22`, border: `1px solid ${textColor}44` }}
+              >
+                {m.name}
+              </div>
+            )}
+            {/* dot */}
+            <div
+              style={{
+                width: 8, height: 8,
+                borderRadius: '50%',
+                backgroundColor: textColor,
+                border: '1.5px solid rgba(0,0,0,0.6)',
+                boxShadow: '0 1px 4px rgba(0,0,0,0.5)',
+                flexShrink: 0,
+              }}
+            />
+            {/* stem */}
+            <div style={{ width: 1.5, height: 10, backgroundColor: textColor, flexShrink: 0 }} />
+          </div>
+        );
+      })}
+    </div>
+  );
+}
 
 const MapPoster = () => {
   const [activeTab, setActiveTab] = useState('theme'); // Default to theme to see changes
@@ -19,6 +162,9 @@ const MapPoster = () => {
   const [exportStatus, setExportStatus] = useState('');
   const [previewDataUrl, setPreviewDataUrl] = useState<string | null>(null);
   const [previewFilename, setPreviewFilename] = useState('');
+  const [exportFormat, setExportFormat] = useState<'png' | 'jpg'>('png');
+  const [exportDpi, setExportDpi] = useState(300);
+  const [exportResolution, setExportResolution] = useState<'1k' | '2k' | '4k' | '6k' | '8k'>('2k');
   const [isMounted, setIsMounted] = useState(false);
   const mapRef = useRef<any>(null);
   const bgMapRef = useRef<any>(null);
@@ -169,21 +315,71 @@ const MapPoster = () => {
   };
 
   const layouts = [
-    { id: 'a1-portrait', category: 'PRINT', name: 'A1 PORTRAIT', dims: '59.4 x 84.1 CM', aspect: 1 / 1.414 },
-    { id: 'a2-portrait', category: 'PRINT', name: 'A2 PORTRAIT', dims: '42 x 59.4 CM', aspect: 1 / 1.414 },
-    { id: 'a3-portrait', category: 'PRINT', name: 'A3 PORTRAIT', dims: '29.7 x 42 CM', aspect: 1 / 1.414 },
-    { id: 'a4-portrait', category: 'PRINT', name: 'A4 PORTRAIT', dims: '21 x 29.7 CM', aspect: 1 / 1.414 },
-    { id: 'a5-portrait', category: 'PRINT', name: 'A5 PORTRAIT', dims: '14.8 x 21 CM', aspect: 1 / 1.414 },
-    { id: 'us-letter', category: 'PRINT', name: 'LETTER (US)', dims: '21.6 x 27.9 CM', aspect: 21.6 / 27.9 },
-    { id: 'inst-square', category: 'SOCIAL MEDIA', name: 'INSTAGRAM SQUARE', dims: '1080 x 1080 PX', aspect: 1 / 1 },
-    { id: 'inst-port', category: 'SOCIAL MEDIA', name: 'INSTAGRAM PORTRAIT', dims: '1080 x 1350 PX', aspect: 1080 / 1350 },
-    { id: 'story', category: 'SOCIAL MEDIA', name: 'STORY (9:16)', dims: '1080 x 1920 PX', aspect: 9 / 16 },
-    { id: 'linkedin-post', category: 'SOCIAL MEDIA', name: 'LINKEDIN POST', dims: '1200 x 627 PX', aspect: 1200 / 627 },
-    { id: 'linkedin-cover', category: 'SOCIAL MEDIA', name: 'LINKEDIN COVER', dims: '1584 x 396 PX', aspect: 1584 / 396 },
-    { id: 'pinterest', category: 'SOCIAL MEDIA', name: 'PINTEREST PIN', dims: '1000 x 1500 PX', aspect: 1000 / 1500 },
-    { id: 'desktop', category: 'DIGITAL', name: 'DESKTOP WALLPAPER', dims: '1920 x 1080 PX', aspect: 1920 / 1080 },
-    { id: 'phone', category: 'DIGITAL', name: 'PHONE WALLPAPER', dims: '1170 x 2532 PX', aspect: 1170 / 2532 },
-    { id: 'perfect-circle', category: 'SHAPES', name: 'PERFECT CIRCLE', dims: 'CIRCULAR', aspect: 1, isCircular: true },
+    // ISO A-series Portrait (exact mm ratios)
+    { id: 'a0-portrait',  category: 'PRINT — ISO A',    name: 'A0 PORTRAIT',         dims: '841 × 1189 MM', aspect: 841 / 1189 },
+    { id: 'a1-portrait',  category: 'PRINT — ISO A',    name: 'A1 PORTRAIT',         dims: '594 × 841 MM',  aspect: 594 / 841 },
+    { id: 'a2-portrait',  category: 'PRINT — ISO A',    name: 'A2 PORTRAIT',         dims: '420 × 594 MM',  aspect: 420 / 594 },
+    { id: 'a3-portrait',  category: 'PRINT — ISO A',    name: 'A3 PORTRAIT',         dims: '297 × 420 MM',  aspect: 297 / 420 },
+    { id: 'a4-portrait',  category: 'PRINT — ISO A',    name: 'A4 PORTRAIT',         dims: '210 × 297 MM',  aspect: 210 / 297 },
+    { id: 'a5-portrait',  category: 'PRINT — ISO A',    name: 'A5 PORTRAIT',         dims: '148 × 210 MM',  aspect: 148 / 210 },
+    { id: 'a6-portrait',  category: 'PRINT — ISO A',    name: 'A6 PORTRAIT',         dims: '105 × 148 MM',  aspect: 105 / 148 },
+    // ISO A-series Landscape
+    { id: 'a0-landscape', category: 'PRINT — ISO A',    name: 'A0 LANDSCAPE',        dims: '1189 × 841 MM', aspect: 1189 / 841 },
+    { id: 'a1-landscape', category: 'PRINT — ISO A',    name: 'A1 LANDSCAPE',        dims: '841 × 594 MM',  aspect: 841 / 594 },
+    { id: 'a2-landscape', category: 'PRINT — ISO A',    name: 'A2 LANDSCAPE',        dims: '594 × 420 MM',  aspect: 594 / 420 },
+    { id: 'a3-landscape', category: 'PRINT — ISO A',    name: 'A3 LANDSCAPE',        dims: '420 × 297 MM',  aspect: 420 / 297 },
+    { id: 'a4-landscape', category: 'PRINT — ISO A',    name: 'A4 LANDSCAPE',        dims: '297 × 210 MM',  aspect: 297 / 210 },
+    // ISO B-series Portrait
+    { id: 'b1-portrait',  category: 'PRINT — ISO B',    name: 'B1 PORTRAIT',         dims: '707 × 1000 MM', aspect: 707 / 1000 },
+    { id: 'b2-portrait',  category: 'PRINT — ISO B',    name: 'B2 PORTRAIT',         dims: '500 × 707 MM',  aspect: 500 / 707 },
+    { id: 'b3-portrait',  category: 'PRINT — ISO B',    name: 'B3 PORTRAIT',         dims: '353 × 500 MM',  aspect: 353 / 500 },
+    { id: 'b4-portrait',  category: 'PRINT — ISO B',    name: 'B4 PORTRAIT',         dims: '250 × 353 MM',  aspect: 250 / 353 },
+    { id: 'b5-portrait',  category: 'PRINT — ISO B',    name: 'B5 PORTRAIT',         dims: '176 × 250 MM',  aspect: 176 / 250 },
+    // US Paper
+    { id: 'us-letter',    category: 'PRINT — US',       name: 'LETTER',              dims: '8.5 × 11 IN',   aspect: 8.5 / 11 },
+    { id: 'us-legal',     category: 'PRINT — US',       name: 'LEGAL',               dims: '8.5 × 14 IN',   aspect: 8.5 / 14 },
+    { id: 'us-tabloid',   category: 'PRINT — US',       name: 'TABLOID / B',         dims: '11 × 17 IN',    aspect: 11 / 17 },
+    { id: 'us-letter-ls', category: 'PRINT — US',       name: 'LETTER LANDSCAPE',    dims: '11 × 8.5 IN',   aspect: 11 / 8.5 },
+    // Poster / Large Format
+    { id: 'poster-18x24', category: 'PRINT — POSTER',   name: '18 × 24 IN',          dims: '18 × 24 IN',    aspect: 18 / 24 },
+    { id: 'poster-24x36', category: 'PRINT — POSTER',   name: '24 × 36 IN',          dims: '24 × 36 IN',    aspect: 24 / 36 },
+    { id: 'poster-27x40', category: 'PRINT — POSTER',   name: '27 × 40 IN (MOVIE)',  dims: '27 × 40 IN',    aspect: 27 / 40 },
+    { id: 'poster-36x48', category: 'PRINT — POSTER',   name: '36 × 48 IN',          dims: '36 × 48 IN',    aspect: 36 / 48 },
+    { id: 'poster-50x70', category: 'PRINT — POSTER',   name: '50 × 70 CM',          dims: '500 × 700 MM',  aspect: 500 / 700 },
+    // Square
+    { id: 'sq-8x8',       category: 'PRINT — SQUARE',   name: '8 × 8 IN',            dims: '8 × 8 IN',      aspect: 1 },
+    { id: 'sq-12x12',     category: 'PRINT — SQUARE',   name: '12 × 12 IN',          dims: '12 × 12 IN',    aspect: 1 },
+    { id: 'sq-20x20',     category: 'PRINT — SQUARE',   name: '20 × 20 CM',          dims: '200 × 200 MM',  aspect: 1 },
+    // Social Media
+    { id: 'inst-square',  category: 'SOCIAL MEDIA',     name: 'INSTAGRAM SQUARE',    dims: '1080 × 1080 PX', aspect: 1 },
+    { id: 'inst-port',    category: 'SOCIAL MEDIA',     name: 'INSTAGRAM PORTRAIT',  dims: '1080 × 1350 PX', aspect: 1080 / 1350 },
+    { id: 'inst-land',    category: 'SOCIAL MEDIA',     name: 'INSTAGRAM LANDSCAPE', dims: '1080 × 566 PX',  aspect: 1080 / 566 },
+    { id: 'story',        category: 'SOCIAL MEDIA',     name: 'STORY / REEL (9:16)', dims: '1080 × 1920 PX', aspect: 9 / 16 },
+    { id: 'fb-post',      category: 'SOCIAL MEDIA',     name: 'FACEBOOK POST',       dims: '1200 × 630 PX',  aspect: 1200 / 630 },
+    { id: 'fb-cover',     category: 'SOCIAL MEDIA',     name: 'FACEBOOK COVER',      dims: '820 × 312 PX',   aspect: 820 / 312 },
+    { id: 'twitter-post', category: 'SOCIAL MEDIA',     name: 'X / TWITTER POST',    dims: '1600 × 900 PX',  aspect: 1600 / 900 },
+    { id: 'twitter-head', category: 'SOCIAL MEDIA',     name: 'X / TWITTER HEADER', dims: '1500 × 500 PX',  aspect: 1500 / 500 },
+    { id: 'linkedin-post',category: 'SOCIAL MEDIA',     name: 'LINKEDIN POST',       dims: '1200 × 627 PX',  aspect: 1200 / 627 },
+    { id: 'linkedin-cover',category: 'SOCIAL MEDIA',    name: 'LINKEDIN COVER',      dims: '1584 × 396 PX',  aspect: 1584 / 396 },
+    { id: 'pinterest',    category: 'SOCIAL MEDIA',     name: 'PINTEREST PIN',       dims: '1000 × 1500 PX', aspect: 1000 / 1500 },
+    { id: 'youtube-thumb',category: 'SOCIAL MEDIA',     name: 'YOUTUBE THUMBNAIL',   dims: '1280 × 720 PX',  aspect: 1280 / 720 },
+    { id: 'tiktok',       category: 'SOCIAL MEDIA',     name: 'TIKTOK / SHORTS',     dims: '1080 × 1920 PX', aspect: 9 / 16 },
+    // Digital / Screens
+    { id: 'desktop-fhd',  category: 'DIGITAL',          name: 'DESKTOP FHD',         dims: '1920 × 1080 PX', aspect: 1920 / 1080 },
+    { id: 'desktop-2k',   category: 'DIGITAL',          name: 'DESKTOP 2K (QHD)',    dims: '2560 × 1440 PX', aspect: 2560 / 1440 },
+    { id: 'desktop-4k',   category: 'DIGITAL',          name: 'DESKTOP 4K (UHD)',    dims: '3840 × 2160 PX', aspect: 3840 / 2160 },
+    { id: 'ultrawide',    category: 'DIGITAL',          name: 'ULTRAWIDE 21:9',      dims: '2560 × 1080 PX', aspect: 2560 / 1080 },
+    { id: 'iphone-15',    category: 'DIGITAL',          name: 'IPHONE 15 PRO',       dims: '1179 × 2556 PX', aspect: 1179 / 2556 },
+    { id: 'iphone-plus',  category: 'DIGITAL',          name: 'IPHONE 15 PLUS',      dims: '1290 × 2796 PX', aspect: 1290 / 2796 },
+    { id: 'android-fhd',  category: 'DIGITAL',          name: 'ANDROID FHD+',        dims: '1080 × 2400 PX', aspect: 1080 / 2400 },
+    { id: 'ipad-pro',     category: 'DIGITAL',          name: 'IPAD PRO 12.9"',      dims: '2048 × 2732 PX', aspect: 2048 / 2732 },
+    { id: 'macbook',      category: 'DIGITAL',          name: 'MACBOOK PRO 16"',     dims: '3456 × 2234 PX', aspect: 3456 / 2234 },
+    // Shapes
+    { id: 'perfect-circle', category: 'SHAPES',         name: 'PERFECT CIRCLE',      dims: 'CIRCULAR',       aspect: 1, isCircular: true },
+    { id: 'sq-1x1',       category: 'SHAPES',           name: 'SQUARE 1:1',          dims: '1:1',            aspect: 1 },
+    { id: 'wide-2x1',     category: 'SHAPES',           name: 'WIDE 2:1',            dims: '2:1',            aspect: 2 },
+    { id: 'classic-4x3',  category: 'SHAPES',           name: 'CLASSIC 4:3',         dims: '4:3',            aspect: 4 / 3 },
+    { id: 'cinema-235',   category: 'SHAPES',           name: 'CINEMASCOPE 2.35:1',  dims: '2.35:1',         aspect: 2.35 },
   ];
 
   const [selectedLayoutId, setSelectedLayoutId] = useState('a4-portrait');
@@ -506,34 +702,72 @@ const MapPoster = () => {
       setExportProgress(75);
       setExportStatus('RENDERING...');
 
+      // Compute exact output dimensions based on resolution + poster aspect ratio
+      const resolutionMap = { '1k': 1024, '2k': 2048, '4k': 4096, '6k': 6144, '8k': 8192 };
+      const targetLongEdge = resolutionMap[exportResolution];
+      const posterEl = posterRef.current;
+      const posterW = posterEl.offsetWidth;
+      const posterH = posterEl.offsetHeight;
+      const aspect = posterW / posterH;
+
+      // Scale so the longest edge equals targetLongEdge
+      let outW: number, outH: number;
+      if (posterW >= posterH) {
+        outW = targetLongEdge;
+        outH = Math.round(targetLongEdge / aspect);
+      } else {
+        outH = targetLongEdge;
+        outW = Math.round(targetLongEdge * aspect);
+      }
+
+      const pixelRatio = outW / posterW;
+
       let dataUrl = '';
+      const exportFn = exportFormat === 'jpg' ? toJpeg : toPng;
+      const exportOpts = exportFormat === 'jpg' ? { quality: 0.97 } : {};
+
+      const baseOpts = {
+        width: posterW,
+        height: posterH,
+        canvasWidth: outW,
+        canvasHeight: outH,
+        pixelRatio,
+        cacheBust: true,
+        ...exportOpts,
+        filter: (node: Element) => {
+          if (node === mapCanvasEl) return false;
+          if (node.tagName === 'LINK' && (node as HTMLLinkElement).rel === 'stylesheet') {
+            try { return !!((node as any).sheet?.cssRules); } catch { return false; }
+          }
+          return true;
+        },
+      };
+
       try {
-        dataUrl = await toPng(posterRef.current, {
-          pixelRatio: 2,
-          cacheBust: true,
-          // backgroundColor removed for transparency
-          filter: (node: Element) => {
-            if (node === mapCanvasEl) return false;
-            if (node.tagName === 'LINK' && (node as HTMLLinkElement).rel === 'stylesheet') {
-              try { return !!((node as any).sheet?.cssRules); } catch { return false; }
-            }
-            return true;
-          },
-        });
+        dataUrl = await exportFn(posterRef.current, baseOpts);
       } catch {
-        dataUrl = await toPng(posterRef.current, {
-          pixelRatio: 1,
+        // fallback: try without canvasWidth/canvasHeight
+        dataUrl = await exportFn(posterRef.current, {
+          pixelRatio,
           cacheBust: true,
-          // backgroundColor removed for transparency
+          ...exportOpts,
           filter: (node: Element) => node !== mapCanvasEl,
         });
+      }
+
+      // Embed DPI metadata into PNG (pHYs chunk: pixels per metre)
+      if (exportFormat === 'png' && exportDpi > 0 && dataUrl.startsWith('data:image/png')) {
+        try {
+          dataUrl = embedPngDpi(dataUrl, exportDpi);
+        } catch { /* non-critical */ }
       }
 
       setExportStatus('EXPORT COMPLETE!');
       setExportProgress(100);
       await new Promise(r => setTimeout(r, 800));
 
-      setPreviewFilename(`${locName.split(',')[0].trim().replace(/\s+/g, '_')}_Map_Poster.png`);
+      const baseName = locName.split(',')[0].trim().replace(/\s+/g, '_');
+      setPreviewFilename(`${baseName}_Map_Poster.${exportFormat}`);
       setPreviewDataUrl(dataUrl);
     } catch (err) {
       console.error('Export error:', err);
@@ -1371,7 +1605,7 @@ const MapPoster = () => {
           </div>
         </aside>
 
-        <main className="flex-1 relative w-full h-full min-h-0 flex flex-col items-center justify-center p-2 md:p-6 md:pl-[88px] pb-[72px] md:pb-6">
+        <main className={`flex-1 relative w-full h-full min-h-0 flex flex-col items-center justify-center p-2 md:p-6 pb-[72px] md:pb-6 transition-all duration-300 ease-in-out ${activeTab ? 'md:pl-[488px]' : 'md:pl-[88px]'}`}>
           {/* Synchronized Background Map */}
           <div className="absolute inset-0 z-0 pointer-events-none overflow-hidden grayscale-[0.3] opacity-40 bg-[#050810]">
             <div className="absolute inset-0 blur-sm scale-110">
@@ -1452,6 +1686,12 @@ const MapPoster = () => {
                   ))}
                 </Map>
               </div>
+
+              <PosterMarkerOverlay
+                mapRef={mapRef}
+                markers={markers}
+                textColor={currentColors['Text']}
+              />
 
               {showOverlay && (
                 <>
@@ -1656,25 +1896,76 @@ const MapPoster = () => {
             </div>
 
             {/* Actions */}
-            <div className="flex items-center justify-end gap-3 px-4 sm:px-6 py-3 sm:py-4 border-t border-white/5" style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}>
-              <button
-                onClick={() => setPreviewDataUrl(null)}
-                className="px-4 sm:px-5 py-2.5 text-xs font-bold tracking-wider rounded-lg border border-white/10 hover:bg-white/5 text-muted-foreground transition-colors uppercase"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={() => {
-                  const link = document.createElement('a');
-                  link.download = previewFilename;
-                  link.href = previewDataUrl;
-                  link.click();
-                }}
-                className="flex items-center gap-2 px-5 sm:px-6 py-2.5 bg-white hover:bg-gray-100 rounded-lg text-black font-black tracking-[0.15em] text-xs shadow-lg transition-all hover:scale-105 active:scale-95"
-              >
-                <Download className="w-4 h-4" />
-                DOWNLOAD
-              </button>
+            <div className="border-t border-white/5" style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}>
+              {/* Export options */}
+              <div className="flex flex-wrap items-center gap-3 px-4 sm:px-6 py-3">
+                {/* Format toggle */}
+                <div className="flex items-center bg-white/5 rounded-lg p-0.5 border border-white/10">
+                  {(['png', 'jpg'] as const).map(fmt => (
+                    <button
+                      key={fmt}
+                      onClick={() => setExportFormat(fmt)}
+                      className={`px-3 py-1.5 text-[10px] font-black tracking-wider rounded-md transition-all uppercase ${
+                        exportFormat === fmt
+                          ? 'bg-white text-black'
+                          : 'text-muted-foreground hover:text-white'
+                      }`}
+                    >
+                      {fmt}
+                    </button>
+                  ))}
+                </div>
+                {/* Resolution toggle */}
+                <div className="flex items-center bg-white/5 rounded-lg p-0.5 border border-white/10">
+                  {(['1k', '2k', '4k', '6k', '8k'] as const).map(res => (
+                    <button
+                      key={res}
+                      onClick={() => setExportResolution(res)}
+                      className={`px-2.5 py-1.5 text-[10px] font-black tracking-wider rounded-md transition-all uppercase ${
+                        exportResolution === res
+                          ? 'bg-white text-black'
+                          : 'text-muted-foreground hover:text-white'
+                      }`}
+                    >
+                      {res}
+                    </button>
+                  ))}
+                </div>
+                {/* DPI input */}
+                <div className="flex items-center gap-2 bg-white/5 border border-white/10 rounded-lg px-3 py-1.5">
+                  <span className="text-[10px] font-bold tracking-wider text-muted-foreground uppercase">DPI</span>
+                  <input
+                    type="number"
+                    min={72}
+                    max={600}
+                    step={1}
+                    value={exportDpi}
+                    onChange={e => setExportDpi(Math.max(72, Math.min(600, Number(e.target.value))))}
+                    className="w-14 bg-transparent text-[11px] font-mono text-white text-center outline-none"
+                  />
+                </div>
+              </div>
+              {/* Buttons */}
+              <div className="flex items-center justify-end gap-3 px-4 sm:px-6 pb-3 sm:pb-4">
+                <button
+                  onClick={() => setPreviewDataUrl(null)}
+                  className="px-4 sm:px-5 py-2.5 text-xs font-bold tracking-wider rounded-lg border border-white/10 hover:bg-white/5 text-muted-foreground transition-colors uppercase"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => {
+                    const link = document.createElement('a');
+                    link.download = previewFilename;
+                    link.href = previewDataUrl!;
+                    link.click();
+                  }}
+                  className="flex items-center gap-2 px-5 sm:px-6 py-2.5 bg-white hover:bg-gray-100 rounded-lg text-black font-black tracking-[0.15em] text-xs shadow-lg transition-all hover:scale-105 active:scale-95"
+                >
+                  <Download className="w-4 h-4" />
+                  DOWNLOAD
+                </button>
+              </div>
             </div>
           </div>
         </div>

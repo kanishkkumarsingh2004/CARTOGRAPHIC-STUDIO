@@ -27,8 +27,27 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const res = await fetch(url, { next: { revalidate: 86400 } });
-    if (!res.ok) return new NextResponse(null, { status: res.status });
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15000);
+
+    let res: Response;
+    try {
+      res = await fetch(url, {
+        signal: controller.signal,
+        cache: 'force-cache',
+        headers: {
+          'User-Agent': 'Mozilla/5.0 MapPoster/1.0',
+          'Accept': '*/*',
+        },
+      });
+    } finally {
+      clearTimeout(timeout);
+    }
+
+    if (!res.ok) {
+      console.error(`[tiles proxy] upstream ${res.status} for ${url}`);
+      return new NextResponse(null, { status: res.status });
+    }
 
     const contentType = res.headers.get('content-type') || 'application/octet-stream';
     const body = await res.arrayBuffer();
@@ -40,7 +59,11 @@ export async function GET(request: NextRequest) {
         'Access-Control-Allow-Origin': '*',
       },
     });
-  } catch {
-    return new NextResponse('Proxy error', { status: 502 });
+  } catch (err: unknown) {
+    const isAbort = err instanceof Error && err.name === 'AbortError';
+    console.error(`[tiles proxy] ${isAbort ? 'timeout' : 'error'} for ${url}:`, err);
+    return new NextResponse(isAbort ? 'Gateway Timeout' : 'Proxy error', {
+      status: isAbort ? 504 : 502,
+    });
   }
 }
