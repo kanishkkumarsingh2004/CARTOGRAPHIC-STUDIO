@@ -156,6 +156,13 @@ type MapProps = {
   bearing?: number;
   /** Pitch (tilt) in degrees */
   pitch?: number;
+  /**
+   * Over-zoom scale factor (TerraInk technique).
+   * Renders the map canvas at (scale × 100%) then CSS-scales it back down,
+   * giving much higher tile detail at the same viewport size.
+   * Use 5.5 to match TerraInk's output quality.
+   */
+  overzoomScale?: number;
 } & Omit<MapLibreGL.MapOptions, "container" | "style" | "center" | "zoom" | "bearing" | "pitch">;
 
 function DefaultLoader() {
@@ -191,6 +198,7 @@ const Map = forwardRef<MapRef, MapProps>(function Map(
     onViewportChange,
     onMoveEnd,
     loading = false,
+    overzoomScale = 1,
     ...props
   },
   ref,
@@ -430,13 +438,22 @@ const Map = forwardRef<MapRef, MapProps>(function Map(
     [mapInstance, isLoaded, isStyleLoaded],
   );
 
+  const scale = Math.max(1, overzoomScale);
+  const innerStyle: React.CSSProperties =
+    scale === 1
+      ? { width: "100%", height: "100%" }
+      : {
+          width: `${scale * 100}%`,
+          height: `${scale * 100}%`,
+          transform: `scale(${1 / scale})`,
+          transformOrigin: "top left",
+        };
+
   return (
     <MapContext.Provider value={contextValue}>
-      <div
-        ref={containerRef}
-        className={cn("relative h-full w-full", className)}
-      >
+      <div className={cn("relative h-full w-full overflow-hidden", className)}>
         {(!isLoaded || loading) && <DefaultLoader />}
+        <div ref={containerRef} style={innerStyle} />
         {/* SSR-safe: children render only when map is loaded on client */}
         {mapInstance && children}
       </div>

@@ -1,15 +1,16 @@
 
 'use client';
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import {
   Download, MapPin, Palette, Layout as LayoutIcon, Brush,
-  Layers, MapPin as MarkerIcon, Settings, Crosshair, MapPinOff,
+  Layers, MapPin as MarkerIcon, Settings, Crosshair,
   Search, X, Lock as LockIcon, RefreshCw
 } from 'lucide-react';
-import { Map, MapMarker, MarkerContent, MarkerPopup } from '@/components/ui/map';
+import { Map, MapMarker, MarkerContent } from '@/components/ui/map';
 import { ExportProgress } from '@/components/ui/export-progress';
 import { toPng } from 'html-to-image';
+import { generateMapStyle, type MapStyleColors } from '@/lib/map-style';
 
 const MapPoster = () => {
   const [activeTab, setActiveTab] = useState('theme'); // Default to theme to see changes
@@ -22,7 +23,7 @@ const MapPoster = () => {
   const mapRef = useRef<any>(null);
   const bgMapRef = useRef<any>(null);
   const posterRef = useRef<HTMLDivElement>(null);
-  const [zoom, setZoom] = useState(13);
+  const [zoom, setZoom] = useState(14.9);
   const [mapCenter, setMapCenter] = useState<[number, number]>([77.4402, 12.6408]);
   const [locName, setLocName] = useState('DELHI');
   const [locCountry, setLocCountry] = useState('INDIA');
@@ -47,11 +48,9 @@ const MapPoster = () => {
   const [showBuildings, setShowBuildings] = useState(false);
   const [showWater, setShowWater] = useState(true);
   const [showParks, setShowParks] = useState(true);
-  const [showMajorRoads, setShowMajorRoads] = useState(true);
-  const [showMinorRoads, setShowMinorRoads] = useState(true);
+  const [showRoads, setShowRoads] = useState(true);
   const [showRail, setShowRail] = useState(true);
   const [showAeroway, setShowAeroway] = useState(true);
-  const [showLabels, setShowLabels] = useState(false);
   const [distance, setDistance] = useState(4000);
   const [cornerRadius, setCornerRadius] = useState(0);
   const [markers, setMarkers] = useState<{ id: string, name: string, coords: [number, number] }[]>([]);
@@ -262,16 +261,6 @@ const MapPoster = () => {
 
   const [currentColors, setCurrentColors] = useState<Record<string, string>>(() => getColorConfigFromTheme(selectedTheme));
 
-  const [detailLevel, setDetailLevel] = useState(65);
-  const [isDetailAuto, setIsDetailAuto] = useState(true);
-
-  // Sync auto detail level unless user has manually adjusted it
-  useEffect(() => {
-    if (isDetailAuto) {
-      setDetailLevel(Math.min(100, Math.max(0, Math.round(((zoom - 8) / (16 - 8)) * 100))));
-    }
-  }, [zoom, isDetailAuto]);
-
   const updateColor = (label: string, color: string) => {
     setCurrentColors(prev => ({ ...prev, [label]: color }));
   };
@@ -288,156 +277,66 @@ const MapPoster = () => {
     setCurrentColors(getColorConfigFromTheme(selectedTheme));
   };
 
-  // Sync colors and visibility for all maps
+  // Derive MapStyleColors from currentColors for generateMapStyle
+  const mapStyleColors = useMemo<MapStyleColors>(() => ({
+    land: currentColors['Land'],
+    landcover: currentColors['Landcover'],
+    water: currentColors['Water'],
+    waterway: currentColors['Waterways'],
+    parks: currentColors['Parks'],
+    aeroway: currentColors['Aeroway'],
+    buildings: currentColors['Buildings'],
+    rail: currentColors['Rail'],
+    roadMajor: currentColors['Roads Major'],
+    roadMinorHigh: currentColors['Roads Minor High'],
+    roadMinorMid: currentColors['Roads Minor Mid'],
+    roadMinorLow: currentColors['Roads Minor Low'],
+    roadPath: currentColors['Roads Path'],
+    roadOutline: currentColors['Road Outline'],
+  }), [currentColors]);
+
+  // Generate the full MapLibre StyleSpecification — TerraInk's approach:
+  // build style from scratch using raw OpenFreeMap planet vector source.
+  // Recomputes only when colors or layer visibility changes.
+  const mapStyle = useMemo(() => generateMapStyle({
+    colors: mapStyleColors,
+    showLandcover,
+    showBuildings,
+    showWater,
+    showParks,
+    showAeroway,
+    showRail,
+    showRoads,
+  }), [mapStyleColors, showLandcover, showBuildings, showWater, showParks, showAeroway, showRail, showRoads]);
+
+  // TerraInk's exact distance↔zoom formula
+  // effectiveContainerPx = max(3300, containerPx * 5.5) — the over-zoom trick
+  const EARTH_CIRCUMFERENCE_M = 40_075_016.686;
+  const TILE_SIZE_PX = 512;
+  const posterContainerPxRef = useRef(600);
+
+  // Measure actual poster width so distanceToZoom is accurate
   useEffect(() => {
-    const maps = [mapRef.current, bgMapRef.current].filter(Boolean);
-    if (maps.length === 0) return;
-
-    const layerVisibilityProps: Record<string, boolean> = {
-      'landcover': showLandcover,
-      'landuse': showLandcover,
-      'building': showBuildings,
-      'water': showWater,
-      'park': showParks,
-      'greenery': showParks,
-      'road': showMajorRoads || showMinorRoads,
-      'motorway': showMajorRoads,
-      'trunk': showMajorRoads,
-      'primary': showMajorRoads,
-      'secondary': showMajorRoads,
-      'tertiary': showMinorRoads,
-      'residential': showMinorRoads,
-      'street': showMinorRoads,
-      'service': showMinorRoads,
-      'path': showMinorRoads,
-      'track': showMinorRoads,
-      'pedestrian': showMinorRoads,
-      'footway': showMinorRoads,
-      'cycleway': showMinorRoads,
-      'railway': showRail,
-      'rail': showRail,
-      'aeroway': showAeroway,
-    };
-
-    const layerMapping: Record<string, { patterns: string[] }> = {
-      'Land': { patterns: ['background', 'landcover', 'landuse', 'natural', 'wood', 'scrub', 'grass', 'glacier', 'sand', 'rock', 'earth', 'ground'] },
-      'Water': { patterns: ['water', 'ocean', 'sea', 'lake', 'reservoir', 'riverbank', 'dock'] },
-      'Waterways': { patterns: ['waterway', 'river', 'canal', 'stream', 'drain', 'ditch'] },
-      'Parks': { patterns: ['park', 'garden', 'greenery', 'recreation', 'leisure', 'nature_reserve', 'golf_course', 'cemetery', 'pitch', 'track_area'] },
-      'Buildings': { patterns: ['building', 'construction', 'roof', 'garage', 'shed', 'house'] },
-      'Landcover': { patterns: ['landcover', 'landuse_area', 'farmland', 'farmyard', 'industrial', 'commercial', 'residential_area', 'quarry'] },
-      'Aeroway': { patterns: ['aeroway', 'airport', 'runway', 'taxiway', 'apron', 'terminal', 'gate', 'hanger'] },
-      'Rail': { patterns: ['railway', 'rail', 'transit', 'transportation_rail', 'train', 'station', 'monorail', 'subway', 'tram', 'light_rail'] },
-      'Roads Major': { patterns: ['road_major', 'road_primary', 'road_secondary', 'road_trunk', 'road_motorway', 'motorway', 'trunk', 'primary', 'secondary', 'highway_major', 'transportation_major', 'main_road'] },
-      'Roads Minor High': { patterns: ['road_minor', 'road_tertiary', 'tertiary', 'highway_minor', 'transportation_minor'] },
-      'Roads Minor Mid': { patterns: ['road_residential', 'road_street', 'residential', 'street', 'highway_residential', 'unclassified'] },
-      'Roads Minor Low': { patterns: ['road_service', 'road_link', 'service', 'link', 'living_street', 'highway_service'] },
-      'Roads Path': { patterns: ['road_path', 'road_track', 'road_pedestrian', 'path', 'track', 'pedestrian', 'footway', 'cycleway', 'steps', 'corridor', 'bridleway', 'pier'] },
-      'Road Outline': { patterns: ['road_outline', 'road_case', 'case', 'outline', 'bridge_case', 'tunnel_case', 'halos'] },
-    };
-
-    const infraPatterns = ['road', 'bridge', 'tunnel', 'highway', 'transportation', 'pier', 'link', 'junction', 'ramp', 'intersection'];
-
-    maps.forEach(map => {
-      const syncStyle = () => {
-        if (!map.isStyleLoaded()) return;
-
-        const layers = map.getStyle()?.layers;
-        if (!layers) return;
-
-        const weightMultiplier = 1 + (detailLevel / 100) * Math.max(0, (16 - map.getZoom()) / 6) * 2;
-
-        layers.forEach((l: any) => {
-          const layerIdLower = l.id.toLowerCase();
-          const sourceLayerLower = (l.source_layer || '').toLowerCase();
-
-          const isDetailLayer = layerIdLower.includes('building') ||
-            layerIdLower.includes('road') ||
-            layerIdLower.includes('park') ||
-            layerIdLower.includes('rail') ||
-            infraPatterns.some(ip => layerIdLower.includes(ip));
-
-          if (isDetailLayer) {
-            try {
-              map.setLayerProperty(l.id, 'minzoom', 0);
-              map.setFilter(l.id, null);
-            } catch (e) { }
-          }
-
-          const labelKeywords = ['label', 'text', 'symbol', 'place', 'name', 'poi', 'point'];
-          if (l.type === 'symbol' || labelKeywords.some(kw => layerIdLower.includes(kw))) {
-            try {
-              map.setLayoutProperty(l.id, 'visibility', showLabels ? 'visible' : 'none');
-              map.setPaintProperty(l.id, 'text-color', currentColors['Text']);
-            } catch (e) { }
-            return;
-          }
-
-          let appliedColor = '';
-          let roadCategory = ''; // Track if this is a major or minor road
-          Object.entries(layerMapping).forEach(([label, config]) => {
-            if (config.patterns.some(p => layerIdLower.includes(p) || sourceLayerLower.includes(p))) {
-              appliedColor = currentColors[label];
-              if (label === 'Roads Major') {
-                roadCategory = 'major';
-              } else if (label.startsWith('Roads ')) {
-                roadCategory = 'minor';
-              }
-            }
-          });
-
-          if (!appliedColor && infraPatterns.some(ip => layerIdLower.includes(ip) || sourceLayerLower.includes(ip))) {
-            appliedColor = currentColors['Roads Minor Mid'];
-            roadCategory = 'minor';
-          }
-
-          if (appliedColor) {
-            try {
-              const prop = l.type === 'fill' ? 'fill-color' : l.type === 'line' ? 'line-color' : l.type === 'background' ? 'background-color' : '';
-              if (prop) map.setPaintProperty(l.id, prop, appliedColor);
-
-              // Handle road visibility based on major/minor category
-              if (roadCategory) {
-                const shouldShow = roadCategory === 'major' ? showMajorRoads : showMinorRoads;
-                map.setLayoutProperty(l.id, 'visibility', shouldShow ? 'visible' : 'none');
-              } else {
-                const visibilityKey = Object.keys(layerVisibilityProps).find(k => layerIdLower.includes(k));
-                if (visibilityKey) {
-                  map.setLayoutProperty(l.id, 'visibility', (layerVisibilityProps as any)[visibilityKey] ? 'visible' : 'none');
-                }
-              }
-
-              if (l.type === 'line' && (isDetailLayer || appliedColor.startsWith('Roads'))) {
-                map.setPaintProperty(l.id, 'line-width',
-                  ['*', ['match', ['geometry-type'], 'LineString', 1, 1], weightMultiplier]
-                );
-              }
-            } catch (e) { }
-          }
-        });
-      };
-
-      if (!map.isStyleLoaded()) {
-        map.once('load', syncStyle);
-        map.on('styledata', syncStyle);
-      } else {
-        syncStyle();
-        map.on('styledata', syncStyle);
-      }
+    if (!posterRef.current) return;
+    const ro = new ResizeObserver(entries => {
+      const w = entries[0]?.contentRect.width;
+      if (w && w > 0) posterContainerPxRef.current = w;
     });
+    ro.observe(posterRef.current);
+    return () => ro.disconnect();
+  }, []);
 
-    return () => {
-      maps.forEach(map => {
-        // We don't remove syncStyle specifically because it's a closure, 
-        // but we can ensure we don't leak memory if needed.
-        // MapLibre doesn't have a clean "remove all listeners for this function" 
-        // unless we store them, but since we recreate the maps rarely, it's okay.
-      });
-    };
-  }, [
-    currentColors, showLandcover, showBuildings, showWater,
-    showParks, showMajorRoads, showMinorRoads, showRail, showAeroway, showLabels, mapRef, bgMapRef, detailLevel, isMounted
-  ]);
+  const distanceToZoom = (distMeters: number, latDeg: number): number => {
+    const effective = Math.max(3300, posterContainerPxRef.current * 5.5);
+    const cosLat = Math.max(0.01, Math.cos((Math.abs(latDeg) * Math.PI) / 180));
+    return Math.log2((EARTH_CIRCUMFERENCE_M * cosLat * effective) / (distMeters * 2 * TILE_SIZE_PX));
+  };
+
+  const zoomToDistance = (z: number, latDeg: number): number => {
+    const effective = Math.max(3300, posterContainerPxRef.current * 5.5);
+    const cosLat = Math.max(0.01, Math.cos((Math.abs(latDeg) * Math.PI) / 180));
+    return Math.round((EARTH_CIRCUMFERENCE_M * cosLat * effective) / (Math.pow(2, z) * 2 * TILE_SIZE_PX));
+  };
 
   const handleMapMoveEnd = async (viewport: { center: [number, number]; zoom: number; bearing: number; pitch: number }) => {
     const { center, zoom: newZoom } = viewport;
@@ -445,8 +344,8 @@ const MapPoster = () => {
     setZoom(newZoom);
     setMapCenter(center);
 
-    // Sync zoom back to distance: distance = 2^ (24.5 - zoom)
-    const newDistance = Math.round(Math.pow(2, 24.5 - newZoom));
+    // Sync zoom back to distance using TerraInk's formula
+    const newDistance = zoomToDistance(newZoom, center[1]);
     setDistance(newDistance);
 
     if (isTextManual) return;
@@ -470,14 +369,15 @@ const MapPoster = () => {
     }
   }, [mapCenter, zoom]);
 
-  // Sync distance change to zoom
+  // Sync distance change to zoom using TerraInk's formula
   useEffect(() => {
     if (!mapRef.current) return;
-    const targetZoom = 24.5 - Math.log2(distance);
+    const targetZoom = distanceToZoom(distance, mapCenter[1]);
     if (Math.abs(mapRef.current.getZoom() - targetZoom) > 0.01) {
       mapRef.current.setZoom(targetZoom);
     }
-  }, [distance, mapRef]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [distance]);
 
   const handleGeolocation = () => {
     if (!navigator.geolocation) {
@@ -488,10 +388,11 @@ const MapPoster = () => {
       async (position) => {
         const { latitude, longitude } = position.coords;
         setMapCenter([longitude, latitude]);
-        setZoom(13);
+        const z = distanceToZoom(distance, latitude);
+        setZoom(z);
 
         if (mapRef.current) {
-          (mapRef.current as any).flyTo({ center: [longitude, latitude], zoom: 13, duration: 1500 });
+          (mapRef.current as any).flyTo({ center: [longitude, latitude], zoom: z, duration: 1500 });
         }
 
         try {
@@ -530,9 +431,10 @@ const MapPoster = () => {
         const lat = feature.geometry.coordinates[1];
 
         setMapCenter([lon, lat]);
-        setZoom(13);
+        const z = distanceToZoom(distance, lat);
+        setZoom(z);
         if (mapRef.current) {
-          mapRef.current.flyTo({ center: [lon, lat], zoom: 13, duration: 2000 });
+          mapRef.current.flyTo({ center: [lon, lat], zoom: z, duration: 2000 });
         }
 
         const addr = await reverseGeocode(lat, lon);
@@ -679,19 +581,22 @@ const MapPoster = () => {
       <style jsx global>{`
         @keyframes spin-slow { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
         .animate-spin-slow { animation: spin-slow 3s linear infinite; }
+        /* Safe area support for notched phones */
+        .safe-area-pb { padding-bottom: max(0.5rem, env(safe-area-inset-bottom)); }
+        .safe-area-pt { padding-top: env(safe-area-inset-top); }
       `}</style>
 
       {/* Header */}
-      <header className="h-14 md:h-16 border-b border-border bg-background flex items-center justify-between px-4 md:px-6 z-50 shrink-0">
-        <div className="flex items-center gap-2 md:gap-3">
-          <div className="w-6 h-6 bg-primary rounded-tr-xl rounded-bl-xl rounded-br-sm rounded-tl-sm rotate-45 flex items-center justify-center shrink-0">
-            <div className="w-3 h-3 bg-background rounded-full"></div>
+      <header className="h-12 md:h-16 border-b border-border bg-background flex items-center justify-between px-3 md:px-6 z-50 shrink-0">
+        <div className="flex items-center gap-2 md:gap-3 min-w-0">
+          <div className="w-5 h-5 md:w-6 md:h-6 bg-primary rounded-tr-xl rounded-bl-xl rounded-br-sm rounded-tl-sm rotate-45 flex items-center justify-center shrink-0">
+            <div className="w-2.5 h-2.5 md:w-3 md:h-3 bg-background rounded-full"></div>
           </div>
-          <div className="flex items-baseline gap-2">
-            <h1 className="text-sm md:text-xl font-bold tracking-widest text-foreground font-sans">
+          <div className="flex items-baseline gap-2 min-w-0">
+            <h1 className="text-xs md:text-xl font-bold tracking-widest text-foreground font-sans truncate">
               CARTOGRAPHIC STUDIO
             </h1>
-            <span className="hidden md:inline text-[10px] text-muted-foreground tracking-[0.2em] font-medium">
+            <span className="hidden md:inline text-[10px] text-muted-foreground tracking-[0.2em] font-medium whitespace-nowrap">
               FREE MAP POSTER & WALLPAPER CREATOR
             </span>
           </div>
@@ -700,9 +605,9 @@ const MapPoster = () => {
         <button
           onClick={handleDownload}
           disabled={exportLoading}
-          className="md:hidden flex items-center gap-2 px-4 py-2 bg-white rounded-lg text-black font-black tracking-wider text-[10px] shadow-lg transition-all active:scale-95 disabled:opacity-50"
+          className="md:hidden flex items-center gap-1.5 px-3 py-1.5 bg-white rounded-lg text-black font-black tracking-wider text-[10px] shadow-lg transition-all active:scale-95 disabled:opacity-50 shrink-0"
         >
-          {exportLoading ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
+          {exportLoading ? <RefreshCw className="w-3 h-3 animate-spin" /> : <Download className="w-3 h-3" />}
           {exportLoading ? '...' : 'EXPORT'}
         </button>
       </header>
@@ -739,7 +644,7 @@ const MapPoster = () => {
         <aside
           className={`
             md:flex fixed md:absolute md:left-[88px] md:top-0 md:bottom-0 md:w-[400px] md:border-r md:border-white/5
-            inset-x-0 bottom-0 max-h-[75vh] md:max-h-none rounded-t-2xl md:rounded-none border-t md:border-t-0 border-white/10
+            inset-x-0 bottom-0 max-h-[65vh] md:max-h-none rounded-t-2xl md:rounded-none border-t md:border-t-0 border-white/10
             bg-[#0a0f18] z-40 md:z-30 flex flex-col overflow-hidden transition-all duration-300 ease-in-out
             ${activeTab
               ? 'translate-y-0 md:translate-x-0 opacity-100'
@@ -871,7 +776,7 @@ const MapPoster = () => {
                     </div>
 
                     <div className="px-6 pb-6">
-                      <div className="grid grid-cols-4 gap-y-6 gap-x-4">
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-y-6 gap-x-4">
                         {colorLabels.map((label, idx) => (
                           <div key={idx} className="flex flex-col items-center gap-2 group relative">
                             <label className="cursor-pointer">
@@ -1214,100 +1119,59 @@ const MapPoster = () => {
                   <h2 className="text-sm font-bold tracking-[0.1em] text-white uppercase mb-1">LAYERS</h2>
                 </div>
 
-                <div className="flex-1 overflow-y-auto px-6 py-6 space-y-6 custom-scrollbar">
-                  {/* Layer visibility toggles */}
+                <div className="flex-1 overflow-y-auto px-6 py-6 space-y-5 custom-scrollbar">
                   {[
                     { label: 'Show landcover', state: showLandcover, setter: setShowLandcover },
                     { label: 'Show buildings', state: showBuildings, setter: setShowBuildings },
                     { label: 'Show water', state: showWater, setter: setShowWater },
                     { label: 'Show parks', state: showParks, setter: setShowParks },
-                    { label: 'Show major roads', state: showMajorRoads, setter: setShowMajorRoads },
-                    { label: 'Show minor roads', state: showMinorRoads, setter: setShowMinorRoads },
+                    { label: 'Show roads', state: showRoads, setter: setShowRoads },
                     { label: 'Show rail', state: showRail, setter: setShowRail },
                     { label: 'Show aeroway', state: showAeroway, setter: setShowAeroway },
-                    { label: 'Show labels', state: showLabels, setter: setShowLabels },
                   ].map(({ label, state, setter }) => (
                     <div key={label} className="flex items-center justify-between">
                       <span className="text-sm font-medium text-white">{label}</span>
                       <button
                         onClick={() => setter(!state)}
-                        className={`relative w-12 h-6 rounded-full transition-colors duration-300 ${state ? 'bg-primary' : 'bg-white/10'
-                          }`}
+                        className={`relative w-12 h-6 rounded-full transition-colors duration-300 ${state ? 'bg-primary' : 'bg-white/10'}`}
                       >
-                        <div className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow-md transition-transform duration-300 ${state ? 'translate-x-6' : 'translate-x-0.5'
-                          }`} />
+                        <div className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow-md transition-transform duration-300 ${state ? 'translate-x-6' : 'translate-x-0.5'}`} />
                       </button>
                     </div>
                   ))}
 
-                  {/* Divider */}
-                  <div className="border-t border-white/5 pt-6">
-                    <div className="flex items-center justify-between mb-2">
-                      <h3 className="text-[10px] font-black tracking-[0.2em] text-primary uppercase">MAP DETAIL LEVEL</h3>
-                      <span className="text-[10px] font-bold text-white bg-primary/20 px-2 py-0.5 rounded-full border border-primary/30">
-                        {detailLevel}%
-                      </span>
-                    </div>
-                    <div className="relative pt-1 pb-6 px-1">
-                      <input
-                        type="range"
-                        min="0"
-                        max="100"
-                        step="1"
-                        value={detailLevel}
-                        onChange={(e) => {
-                          const val = parseInt(e.target.value);
-                          setDetailLevel(val);
-                          setIsDetailAuto(false);
-                        }}
-                        className="w-full h-1 bg-white/10 rounded-full appearance-none cursor-pointer accent-primary"
-                        style={{
-                          background: `linear-gradient(to right, var(--primary) 0%, var(--primary) ${detailLevel}%, rgba(255,255,255,0.1) ${detailLevel}%, rgba(255,255,255,0.1) 100%)`
-                        }}
-                      />
-                      {!isDetailAuto && (
-                        <button
-                          onClick={() => setIsDetailAuto(true)}
-                          className="absolute right-0 top-6 text-[9px] font-bold text-primary hover:text-white transition-colors uppercase tracking-tighter"
-                        >
-                          Auto Sync
-                        </button>
-                      )}
-                    </div>
-
-                    <h3 className="text-[10px] font-black tracking-[0.2em] text-primary uppercase mb-6">MAP DETAILS</h3>
-
-                    {/* Distance Control */}
-                    <div className="mb-8">
-                      <div className="flex items-center justify-between mb-4">
-                        <span className="text-sm font-bold text-white">Distance (m)</span>
-                        <div className="bg-white/5 border border-white/10 rounded-xl px-4 py-3 min-w-[120px] flex justify-end shadow-inner">
-                          <input
-                            type="text"
-                            value={distance}
-                            onChange={(e) => {
-                              const val = parseInt(e.target.value.replace(/\D/g, ''));
-                              if (!isNaN(val)) setDistance(val);
-                            }}
-                            className="bg-transparent text-right text-white font-bold text-base outline-none w-full"
-                          />
-                        </div>
-                      </div>
-
-                      <div className="relative pt-1 pb-6 px-1">
+                  <div className="pt-4 border-t border-white/5">
+                    <h3 className="text-[10px] font-black tracking-[0.2em] text-primary uppercase mb-4">MAP DETAILS</h3>
+                    <div className="flex items-center justify-between mb-3">
+                      <span className="text-sm font-bold text-white">Distance (m)</span>
+                      <div className="bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 min-w-[110px] flex justify-end shadow-inner">
                         <input
-                          type="range"
-                          min="4.6"
-                          max="16.8"
-                          step="0.01"
-                          value={Math.log(distance)}
-                          onChange={(e) => setDistance(Math.round(Math.exp(parseFloat(e.target.value))))}
-                          className="w-full h-1.5 bg-white/10 rounded-full appearance-none cursor-pointer accent-primary"
-                          style={{
-                            background: `linear-gradient(to right, var(--primary) 0%, var(--primary) ${((Math.log(distance) - 4.6) / (16.8 - 4.6)) * 100}%, rgba(255,255,255,0.1) ${((Math.log(distance) - 4.6) / (16.8 - 4.6)) * 100}%, rgba(255,255,255,0.1) 100%)`
+                          type="text"
+                          value={distance}
+                          onChange={(e) => {
+                            const val = parseInt(e.target.value.replace(/\D/g, ''));
+                            if (!isNaN(val) && val > 0) setDistance(val);
                           }}
+                          className="bg-transparent text-right text-white font-bold text-base outline-none w-full"
                         />
                       </div>
+                    </div>
+                    <input
+                      type="range"
+                      min="4.6"
+                      max="16.8"
+                      step="0.01"
+                      value={Math.log(Math.max(100, distance))}
+                      onChange={(e) => setDistance(Math.round(Math.exp(parseFloat(e.target.value))))}
+                      className="w-full h-1.5 bg-white/10 rounded-full appearance-none cursor-pointer accent-primary"
+                      style={{
+                        background: `linear-gradient(to right, var(--primary) 0%, var(--primary) ${((Math.log(Math.max(100, distance)) - 4.6) / (16.8 - 4.6)) * 100}%, rgba(255,255,255,0.1) ${((Math.log(Math.max(100, distance)) - 4.6) / (16.8 - 4.6)) * 100}%, rgba(255,255,255,0.1) 100%)`
+                      }}
+                    />
+                    <div className="flex justify-between mt-2">
+                      {['100 m', '100K m', '1M m', '20M m'].map(l => (
+                        <span key={l} className="text-[9px] text-muted-foreground font-mono">{l}</span>
+                      ))}
                     </div>
                   </div>
                 </div>
@@ -1507,16 +1371,17 @@ const MapPoster = () => {
           </div>
         </aside>
 
-        <main className="flex-1 relative w-full h-full min-h-0 flex flex-col items-center justify-center p-3 md:p-6 md:pl-[88px] pb-20 md:pb-6">
+        <main className="flex-1 relative w-full h-full min-h-0 flex flex-col items-center justify-center p-2 md:p-6 md:pl-[88px] pb-[72px] md:pb-6">
           {/* Synchronized Background Map */}
           <div className="absolute inset-0 z-0 pointer-events-none overflow-hidden grayscale-[0.3] opacity-40 bg-[#050810]">
             <div className="absolute inset-0 blur-sm scale-110">
               <Map
                 ref={bgMapRef}
-                theme="dark"
+                styles={{ dark: mapStyle as any, light: mapStyle as any }}
                 center={mapCenter}
-                zoom={zoom - 1} // Slightly zoomed out for context
+                zoom={zoom - 1}
                 bearing={bearing}
+                overzoomScale={5.5}
                 className="w-full h-full"
                 dragPan={false}
                 scrollZoom={false}
@@ -1529,7 +1394,7 @@ const MapPoster = () => {
             </div>
             <div className="absolute inset-0 bg-gradient-to-b from-[#050810]/40 via-transparent to-[#050810]/60" />
           </div>
-          <div className="z-20 flex flex-col items-center gap-6 pb-12 w-full max-w-full overflow-hidden px-4">
+          <div className="z-20 flex flex-col items-center gap-4 md:gap-6 w-full max-w-full overflow-hidden px-2 md:px-4">
             <div
               ref={posterRef}
               className={`relative shadow-[0_0_50px_rgba(0,0,0,0.5)] border overflow-hidden ring-1 ring-white/10 flex flex-col pointer-events-auto shrink transition-all duration-500 mx-auto`}
@@ -1538,20 +1403,21 @@ const MapPoster = () => {
                 borderColor: currentColors['Road Outline'],
                 aspectRatio: currentLayoutAspect,
                 borderRadius: (selectedLayout as any).isCircular ? '50%' : `${cornerRadius}px`,
-                width: `min(90vw, calc(70vh * ${currentLayoutAspect}))`,
+                width: `min(92vw, calc(58vh * ${currentLayoutAspect}))`,
                 maxWidth: '100%',
-                maxHeight: '70vh',
+                maxHeight: '58vh',
                 height: 'auto',
               }}
             >
               <div id="map-capture-layer" className="absolute inset-0">
                 <Map
                   ref={mapRef}
-                  theme="dark"
+                  styles={{ dark: mapStyle as any, light: mapStyle as any }}
                   center={mapCenter}
                   zoom={zoom}
                   bearing={bearing}
                   onMoveEnd={handleMapMoveEnd}
+                  overzoomScale={5.5}
                   className="w-full h-full"
                   dragPan={!isMapLocked}
                   scrollZoom={!isMapLocked}
@@ -1631,31 +1497,30 @@ const MapPoster = () => {
             </div>
 
             {!isMapLocked && (
-              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 px-4 py-3 bg-background/80 backdrop-blur-xl border border-white/10 rounded-xl shadow-2xl animate-in fade-in slide-in-from-bottom-4 duration-300">
-                <button
-                  onClick={() => setIsMapLocked(true)}
-                  className="flex items-center gap-2 px-4 py-2 bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 rounded-lg text-xs font-bold transition-all transition-colors uppercase"
-                >
-                  <LockIcon className="w-3.5 h-3.5" />
-                  Lock Map
-                </button>
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3 px-3 sm:px-4 py-2.5 sm:py-3 bg-background/80 backdrop-blur-xl border border-white/10 rounded-xl shadow-2xl animate-in fade-in slide-in-from-bottom-4 duration-300 w-full sm:w-auto">
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setIsMapLocked(true)}
+                    className="flex items-center gap-2 px-3 py-2 bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 rounded-lg text-xs font-bold transition-all uppercase"
+                  >
+                    <LockIcon className="w-3.5 h-3.5" />
+                    Lock Map
+                  </button>
 
-                <div className="hidden sm:block w-px h-6 bg-white/10" />
+                  <button
+                    onClick={() => setIsRotationEnabled(!isRotationEnabled)}
+                    className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-bold transition-all uppercase ${isRotationEnabled
+                        ? 'bg-primary text-black'
+                        : 'bg-white/5 hover:bg-white/10 text-white border border-white/10'
+                      }`}
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 ${isRotationEnabled ? 'animate-spin-slow' : ''}`} />
+                    <span className="hidden sm:inline">{isRotationEnabled ? 'Disable Rotation' : 'Enable Rotation'}</span>
+                    <span className="sm:hidden">{isRotationEnabled ? 'No Rotate' : 'Rotate'}</span>
+                  </button>
+                </div>
 
-                <button
-                  onClick={() => setIsRotationEnabled(!isRotationEnabled)}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all uppercase ${isRotationEnabled
-                      ? 'bg-primary text-black'
-                      : 'bg-white/5 hover:bg-white/10 text-white border border-white/10'
-                    }`}
-                >
-                  <RefreshCw className={`w-3.5 h-3.5 ${isRotationEnabled ? 'animate-spin-slow' : ''}`} />
-                  {isRotationEnabled ? 'Disable Rotation' : 'Enable Rotation'}
-                </button>
-
-                <div className="hidden sm:block w-px h-6 bg-white/10" />
-
-                <div className="flex flex-1 flex-wrap items-center gap-3 px-2">
+                <div className="flex items-center gap-2 px-1">
                   <button
                     onClick={() => mapRef.current?.zoomTo(zoom - 0.5)}
                     className="p-1.5 hover:bg-white/10 rounded-md text-white transition-colors"
@@ -1674,7 +1539,7 @@ const MapPoster = () => {
                       setZoom(newZoom);
                       mapRef.current?.setZoom(newZoom);
                     }}
-                    className="w-32 h-1.5 bg-white/10 rounded-full appearance-none cursor-pointer accent-primary"
+                    className="flex-1 min-w-[80px] sm:w-32 h-1.5 bg-white/10 rounded-full appearance-none cursor-pointer accent-primary"
                   />
 
                   <button
@@ -1688,22 +1553,27 @@ const MapPoster = () => {
             )}
 
             {/* Bottom Actions under the Poster */}
-            <div className="flex flex-col sm:flex-row flex-wrap items-center gap-3 shrink-0 transition-opacity w-full justify-center">
-              <button onClick={handleRecenter} className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 md:px-6 py-2.5 md:py-3 bg-background/90 backdrop-blur-md hover:bg-secondary hover:text-primary rounded-full border border-border font-medium text-xs md:text-sm text-foreground shadow-xl transition-colors">
-                <Crosshair className="w-4 h-4" />
-                <span className="hidden sm:inline">Recenter</span>
+            <div className="flex flex-row flex-wrap items-center gap-2 sm:gap-3 shrink-0 transition-opacity w-full justify-center">
+              <button onClick={handleRecenter} className="flex items-center justify-center gap-2 px-4 py-2 md:px-6 md:py-3 bg-background/90 backdrop-blur-md hover:bg-secondary hover:text-primary rounded-full border border-border font-medium text-xs text-foreground shadow-xl transition-colors">
+                <Crosshair className="w-3.5 h-3.5 md:w-4 md:h-4" />
+                <span>Recenter</span>
               </button>
               <button
                 onClick={() => setIsMapLocked(!isMapLocked)}
-                className={`flex items-center gap-2 px-4 md:px-6 py-2.5 md:py-3 rounded-full border font-medium text-xs md:text-sm shadow-xl transition-all justify-center ${isMapLocked
+                className={`flex items-center gap-2 px-4 py-2 md:px-6 md:py-3 rounded-full border font-medium text-xs shadow-xl transition-all justify-center ${isMapLocked
                     ? 'bg-primary text-black border-transparent hover:opacity-90'
                     : 'bg-background/90 text-foreground border-border hover:bg-secondary hover:text-primary'
                   }`}
               >
-                {isMapLocked ? <Brush className="w-4 h-4" /> : <LockIcon className="w-4 h-4" />}
+                {isMapLocked ? <Brush className="w-3.5 h-3.5 md:w-4 md:h-4" /> : <LockIcon className="w-3.5 h-3.5 md:w-4 md:h-4" />}
                 {isMapLocked ? 'Edit Map' : 'Lock Map'}
               </button>
             </div>
+
+            {/* Credits — mobile only, shown below buttons */}
+            <p className="md:hidden text-[9px] font-mono tracking-[0.2em] text-white/40 uppercase text-center">
+              © 2026 Cartographic Studio
+            </p>
           </div>
 
           {/* Floating Bottom Right — desktop only */}
@@ -1730,7 +1600,7 @@ const MapPoster = () => {
           </footer>
 
           {/* Mobile bottom tab bar */}
-          <div className="md:hidden fixed bottom-0 left-0 right-0 z-30 bg-background/95 backdrop-blur-xl border-t border-border flex items-center justify-around px-2 py-2 safe-area-pb">
+          <div className="md:hidden fixed bottom-0 left-0 right-0 z-30 bg-background/95 backdrop-blur-xl border-t border-border flex items-center justify-around px-1 pt-1.5 pb-safe safe-area-pb" style={{ paddingBottom: 'max(0.5rem, env(safe-area-inset-bottom))' }}>
             {tabs.map((tab) => {
               const Icon = tab.icon;
               const isActive = activeTab === tab.id;
@@ -1741,10 +1611,10 @@ const MapPoster = () => {
                     setActiveTab(activeTab === tab.id ? '' : tab.id);
                     if (tab.id !== 'theme') setIsEditorOpen(false);
                   }}
-                  className={`flex flex-col items-center gap-1 px-3 py-1.5 rounded-xl transition-colors ${isActive ? 'text-primary bg-primary/10' : 'text-muted-foreground'}`}
+                  className={`flex flex-col items-center gap-0.5 px-2 py-1.5 rounded-xl transition-colors min-w-0 flex-1 ${isActive ? 'text-primary bg-primary/10' : 'text-muted-foreground'}`}
                 >
-                  <Icon className="w-5 h-5" strokeWidth={isActive ? 2.5 : 1.5} />
-                  <span className="text-[8px] font-bold tracking-wider">{tab.label}</span>
+                  <Icon className="w-4 h-4 shrink-0" strokeWidth={isActive ? 2.5 : 1.5} />
+                  <span className="text-[7px] font-bold tracking-wide truncate w-full text-center">{tab.label}</span>
                 </button>
               );
             })}
@@ -1759,13 +1629,13 @@ const MapPoster = () => {
 
       {/* Preview Dialog */}
       {previewDataUrl && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 backdrop-blur-xl animate-in fade-in duration-300">
-          <div className="flex flex-col bg-[#0a0f18] border border-white/10 rounded-2xl shadow-2xl overflow-hidden max-w-2xl w-full mx-6 animate-in zoom-in-95 slide-in-from-bottom-4 duration-300">
+        <div className="fixed inset-0 z-[9999] flex items-end sm:items-center justify-center bg-black/70 backdrop-blur-xl animate-in fade-in duration-300">
+          <div className="flex flex-col bg-[#0a0f18] border border-white/10 rounded-t-2xl sm:rounded-2xl shadow-2xl overflow-hidden w-full sm:max-w-2xl sm:mx-6 animate-in zoom-in-95 slide-in-from-bottom-4 duration-300">
             {/* Header */}
-            <div className="flex items-center justify-between px-6 py-4 border-b border-white/5">
+            <div className="flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4 border-b border-white/5">
               <div>
                 <p className="text-xs font-black tracking-[0.3em] text-white uppercase">Preview</p>
-                <p className="text-[10px] text-muted-foreground font-mono mt-0.5">{previewFilename}</p>
+                <p className="text-[10px] text-muted-foreground font-mono mt-0.5 truncate max-w-[200px] sm:max-w-none">{previewFilename}</p>
               </div>
               <button
                 onClick={() => setPreviewDataUrl(null)}
@@ -1776,20 +1646,20 @@ const MapPoster = () => {
             </div>
 
             {/* Image Preview */}
-            <div className="p-4 bg-[#050810]">
+            <div className="p-3 sm:p-4 bg-[#050810]">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src={previewDataUrl}
                 alt="Map poster preview"
-                className="w-full rounded-lg object-contain max-h-[60vh]"
+                className="w-full rounded-lg object-contain max-h-[45vh] sm:max-h-[60vh]"
               />
             </div>
 
             {/* Actions */}
-            <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-white/5">
+            <div className="flex items-center justify-end gap-3 px-4 sm:px-6 py-3 sm:py-4 border-t border-white/5" style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}>
               <button
                 onClick={() => setPreviewDataUrl(null)}
-                className="px-5 py-2.5 text-xs font-bold tracking-wider rounded-lg border border-white/10 hover:bg-white/5 text-muted-foreground transition-colors uppercase"
+                className="px-4 sm:px-5 py-2.5 text-xs font-bold tracking-wider rounded-lg border border-white/10 hover:bg-white/5 text-muted-foreground transition-colors uppercase"
               >
                 Cancel
               </button>
@@ -1800,7 +1670,7 @@ const MapPoster = () => {
                   link.href = previewDataUrl;
                   link.click();
                 }}
-                className="flex items-center gap-2 px-6 py-2.5 bg-white hover:bg-gray-100 rounded-lg text-black font-black tracking-[0.15em] text-xs shadow-lg transition-all hover:scale-105 active:scale-95"
+                className="flex items-center gap-2 px-5 sm:px-6 py-2.5 bg-white hover:bg-gray-100 rounded-lg text-black font-black tracking-[0.15em] text-xs shadow-lg transition-all hover:scale-105 active:scale-95"
               >
                 <Download className="w-4 h-4" />
                 DOWNLOAD

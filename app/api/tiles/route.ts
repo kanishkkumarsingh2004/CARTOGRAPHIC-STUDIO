@@ -7,12 +7,18 @@ export async function GET(request: NextRequest) {
 
   // Only proxy known safe map CDNs
   const allowed = [
+    'tiles.openfreemap.org',
+    'tile.openfreemap.org',
+    'a.tile.openfreemap.org',
+    'b.tile.openfreemap.org',
+    'c.tile.openfreemap.org',
+    'fonts.openmaptiles.org',
+    'demotiles.maplibre.org',
     'basemaps.cartocdn.com',
     'a.basemaps.cartocdn.com',
     'b.basemaps.cartocdn.com',
     'c.basemaps.cartocdn.com',
     'd.basemaps.cartocdn.com',
-    'fonts.openmaptiles.org',
     'api.maptiler.com',
   ];
   const { hostname } = new URL(url);
