@@ -5,7 +5,7 @@ import React, { useState, useRef, useEffect, useMemo } from 'react';
 import {
   Download, MapPin, Palette, Layout as LayoutIcon, Brush,
   Layers, MapPin as MarkerIcon, Settings, Crosshair,
-  Search, X, Lock as LockIcon, RefreshCw
+  Search, X, Lock as LockIcon, RefreshCw, ZoomIn, ZoomOut
 } from 'lucide-react';
 import { Map, MapMarker, MarkerContent } from '@/components/ui/map';
 import { ExportProgress } from '@/components/ui/export-progress';
@@ -644,7 +644,7 @@ const MapPoster = () => {
         <aside
           className={`
             md:flex fixed md:absolute md:left-[88px] md:top-0 md:bottom-0 md:w-[400px] md:border-r md:border-white/5
-            inset-x-0 bottom-0 max-h-[65vh] md:max-h-none rounded-t-2xl md:rounded-none border-t md:border-t-0 border-white/10
+            inset-x-0 bottom-14 md:bottom-0 max-h-[65vh] md:max-h-none rounded-t-2xl md:rounded-none border-t md:border-t-0 border-white/10
             bg-[#0a0f18] z-40 md:z-30 flex flex-col overflow-hidden transition-all duration-300 ease-in-out
             ${activeTab
               ? 'translate-y-0 md:translate-x-0 opacity-100'
@@ -1497,37 +1497,35 @@ const MapPoster = () => {
             </div>
 
             {!isMapLocked && (
-              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3 px-3 sm:px-4 py-2.5 sm:py-3 bg-background/80 backdrop-blur-xl border border-white/10 rounded-xl shadow-2xl animate-in fade-in slide-in-from-bottom-4 duration-300 w-full sm:w-auto">
-                <div className="flex items-center gap-2">
+              <div className="flex flex-col gap-2 w-full sm:w-auto animate-in fade-in slide-in-from-bottom-4 duration-300">
+                {/* Row 1: Lock + Rotate */}
+                <div className="flex items-center gap-2 bg-background/80 backdrop-blur-xl border border-white/10 rounded-xl px-3 py-2.5 shadow-2xl">
                   <button
                     onClick={() => setIsMapLocked(true)}
-                    className="flex items-center gap-2 px-3 py-2 bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 rounded-lg text-xs font-bold transition-all uppercase"
+                    className="flex items-center gap-2 px-3 py-2 bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 rounded-lg text-xs font-bold transition-all uppercase flex-1 justify-center"
                   >
                     <LockIcon className="w-3.5 h-3.5" />
                     Lock Map
                   </button>
-
                   <button
                     onClick={() => setIsRotationEnabled(!isRotationEnabled)}
-                    className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-bold transition-all uppercase ${isRotationEnabled
+                    className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-bold transition-all uppercase flex-1 justify-center ${isRotationEnabled
                         ? 'bg-primary text-black'
                         : 'bg-white/5 hover:bg-white/10 text-white border border-white/10'
                       }`}
                   >
                     <RefreshCw className={`w-3.5 h-3.5 ${isRotationEnabled ? 'animate-spin-slow' : ''}`} />
-                    <span className="hidden sm:inline">{isRotationEnabled ? 'Disable Rotation' : 'Enable Rotation'}</span>
-                    <span className="sm:hidden">{isRotationEnabled ? 'No Rotate' : 'Rotate'}</span>
+                    Rotate
                   </button>
                 </div>
-
-                <div className="flex items-center gap-2 px-1">
+                {/* Row 2: Zoom slider */}
+                <div className="flex items-center gap-3 bg-background/80 backdrop-blur-xl border border-white/10 rounded-xl px-4 py-2.5 shadow-2xl">
                   <button
-                    onClick={() => mapRef.current?.zoomTo(zoom - 0.5)}
-                    className="p-1.5 hover:bg-white/10 rounded-md text-white transition-colors"
+                    onClick={() => { const z = Math.max(1, zoom - 0.5); setZoom(z); mapRef.current?.zoomTo(z); }}
+                    className="p-1.5 hover:bg-white/10 rounded-md text-white transition-colors shrink-0"
                   >
-                    <Search className="w-4 h-4" />
+                    <ZoomOut className="w-4 h-4" />
                   </button>
-
                   <input
                     type="range"
                     min="1"
@@ -1539,14 +1537,16 @@ const MapPoster = () => {
                       setZoom(newZoom);
                       mapRef.current?.setZoom(newZoom);
                     }}
-                    className="flex-1 min-w-[80px] sm:w-32 h-1.5 bg-white/10 rounded-full appearance-none cursor-pointer accent-primary"
+                    className="flex-1 h-1.5 bg-white/10 rounded-full appearance-none cursor-pointer accent-primary"
+                    style={{
+                      background: `linear-gradient(to right, var(--primary) 0%, var(--primary) ${((zoom - 1) / 19) * 100}%, rgba(255,255,255,0.1) ${((zoom - 1) / 19) * 100}%, rgba(255,255,255,0.1) 100%)`
+                    }}
                   />
-
                   <button
-                    onClick={() => mapRef.current?.zoomTo(zoom + 0.5)}
-                    className="p-1.5 hover:bg-white/10 rounded-md text-white transition-colors"
+                    onClick={() => { const z = Math.min(20, zoom + 0.5); setZoom(z); mapRef.current?.zoomTo(z); }}
+                    className="p-1.5 hover:bg-white/10 rounded-md text-white transition-colors shrink-0"
                   >
-                    <Search className="w-4 h-4" />
+                    <ZoomIn className="w-4 h-4" />
                   </button>
                 </div>
               </div>
@@ -1600,7 +1600,7 @@ const MapPoster = () => {
           </footer>
 
           {/* Mobile bottom tab bar */}
-          <div className="md:hidden fixed bottom-0 left-0 right-0 z-30 bg-background/95 backdrop-blur-xl border-t border-border flex items-center justify-around px-1 pt-1.5 pb-safe safe-area-pb" style={{ paddingBottom: 'max(0.5rem, env(safe-area-inset-bottom))' }}>
+          <div className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-background/95 backdrop-blur-xl border-t border-border flex items-center justify-around px-1 pt-1.5 pb-safe safe-area-pb" style={{ paddingBottom: 'max(0.5rem, env(safe-area-inset-bottom))' }}>
             {tabs.map((tab) => {
               const Icon = tab.icon;
               const isActive = activeTab === tab.id;
@@ -1629,8 +1629,8 @@ const MapPoster = () => {
 
       {/* Preview Dialog */}
       {previewDataUrl && (
-        <div className="fixed inset-0 z-[9999] flex items-end sm:items-center justify-center bg-black/70 backdrop-blur-xl animate-in fade-in duration-300">
-          <div className="flex flex-col bg-[#0a0f18] border border-white/10 rounded-t-2xl sm:rounded-2xl shadow-2xl overflow-hidden w-full sm:max-w-2xl sm:mx-6 animate-in zoom-in-95 slide-in-from-bottom-4 duration-300">
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 backdrop-blur-xl animate-in fade-in duration-300 p-4">
+          <div className="flex flex-col bg-[#0a0f18] border border-white/10 rounded-2xl shadow-2xl overflow-hidden w-full max-w-2xl animate-in zoom-in-95 duration-300">
             {/* Header */}
             <div className="flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4 border-b border-white/5">
               <div>
