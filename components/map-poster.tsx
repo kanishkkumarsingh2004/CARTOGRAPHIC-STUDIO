@@ -179,6 +179,9 @@ const MapPoster = () => {
   const [showPosterText, setShowPosterText] = useState(true);
   const [showOverlay, setShowOverlay] = useState(true);
   const [selectedFont, setSelectedFont] = useState('Space Grotesk');
+  const [fontSizeOverride, setFontSizeOverride] = useState<number | null>(null); // null = auto
+  const [countrySizeOverride, setCountrySizeOverride] = useState<number | null>(null);
+  const [coordSizeOverride, setCoordSizeOverride] = useState<number | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchLoading, setSearchLoading] = useState(false);
   const [isTextManual, setIsTextManual] = useState(false);
@@ -512,11 +515,15 @@ const MapPoster = () => {
   const posterContainerPxRef = useRef(600);
 
   // Measure actual poster width so distanceToZoom is accurate
+  const [posterWidth, setPosterWidth] = useState(400);
   useEffect(() => {
     if (!posterRef.current) return;
     const ro = new ResizeObserver(entries => {
       const w = entries[0]?.contentRect.width;
-      if (w && w > 0) posterContainerPxRef.current = w;
+      if (w && w > 0) {
+        posterContainerPxRef.current = w;
+        setPosterWidth(w);
+      }
     });
     ro.observe(posterRef.current);
     return () => ro.disconnect();
@@ -1173,7 +1180,7 @@ const MapPoster = () => {
                     <div key={cat} className="space-y-4">
                       <h3 className="text-[10px] font-black tracking-[0.2em] text-muted-foreground uppercase">{cat}</h3>
                       <div className="grid grid-cols-2 gap-3">
-                        {layouts.filter(l => l.category === cat).map((layout) => (
+                        {layouts.filter(l => l.category === cat || l.category.startsWith(cat + ' —')).map((layout) => (
                           <button
                             key={layout.id}
                             onClick={() => {
@@ -1320,6 +1327,111 @@ const MapPoster = () => {
                       <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-muted-foreground">
                         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
                       </div>
+                    </div>
+                  </div>
+
+                  {/* Font Size */}
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <label className="text-xs font-medium text-muted-foreground">City font size</label>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] font-mono text-muted-foreground bg-white/5 px-1.5 py-0.5 rounded border border-white/5">
+                          {fontSizeOverride ?? Math.round(Math.max(12, posterWidth * 0.09))}px
+                        </span>
+                        {fontSizeOverride !== null && (
+                          <button
+                            onClick={() => setFontSizeOverride(null)}
+                            className="text-[9px] font-bold tracking-widest text-muted-foreground hover:text-white uppercase border border-white/5 bg-white/5 px-2 py-0.5 rounded transition-all"
+                          >
+                            Auto
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <input
+                        type="range"
+                        min="8"
+                        max="200"
+                        step="1"
+                        value={fontSizeOverride ?? Math.round(Math.max(12, posterWidth * 0.09))}
+                        onChange={(e) => setFontSizeOverride(parseInt(e.target.value))}
+                        className="flex-1 h-1.5 rounded-full appearance-none cursor-pointer accent-primary"
+                        style={{
+                          background: `linear-gradient(to right, var(--primary) 0%, var(--primary) ${(((fontSizeOverride ?? Math.round(Math.max(12, posterWidth * 0.09))) - 8) / 192) * 100}%, rgba(255,255,255,0.1) ${(((fontSizeOverride ?? Math.round(Math.max(12, posterWidth * 0.09))) - 8) / 192) * 100}%, rgba(255,255,255,0.1) 100%)`
+                        }}
+                      />
+                      <input
+                        type="number"
+                        min="8"
+                        max="500"
+                        value={fontSizeOverride ?? Math.round(Math.max(12, posterWidth * 0.09))}
+                        onChange={(e) => {
+                          const v = parseInt(e.target.value);
+                          if (!isNaN(v) && v >= 8) setFontSizeOverride(v);
+                        }}
+                        className="w-16 bg-white/5 border border-white/10 rounded-lg px-2 py-1.5 text-sm text-white text-center focus:border-primary/50 focus:outline-none"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Country font size */}
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <label className="text-xs font-medium text-muted-foreground">Country font size</label>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] font-mono text-muted-foreground bg-white/5 px-1.5 py-0.5 rounded border border-white/5">
+                          {countrySizeOverride ?? Math.round(Math.max(8, posterWidth * 0.038))}px
+                        </span>
+                        {countrySizeOverride !== null && (
+                          <button onClick={() => setCountrySizeOverride(null)} className="text-[9px] font-bold tracking-widest text-muted-foreground hover:text-white uppercase border border-white/5 bg-white/5 px-2 py-0.5 rounded transition-all">Auto</button>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <input
+                        type="range" min="6" max="150" step="1"
+                        value={countrySizeOverride ?? Math.round(Math.max(8, posterWidth * 0.038))}
+                        onChange={(e) => setCountrySizeOverride(parseInt(e.target.value))}
+                        className="flex-1 h-1.5 rounded-full appearance-none cursor-pointer accent-primary"
+                        style={{ background: `linear-gradient(to right, var(--primary) 0%, var(--primary) ${(((countrySizeOverride ?? Math.round(Math.max(8, posterWidth * 0.038))) - 6) / 144) * 100}%, rgba(255,255,255,0.1) ${(((countrySizeOverride ?? Math.round(Math.max(8, posterWidth * 0.038))) - 6) / 144) * 100}%, rgba(255,255,255,0.1) 100%)` }}
+                      />
+                      <input
+                        type="number" min="6" max="500"
+                        value={countrySizeOverride ?? Math.round(Math.max(8, posterWidth * 0.038))}
+                        onChange={(e) => { const v = parseInt(e.target.value); if (!isNaN(v) && v >= 6) setCountrySizeOverride(v); }}
+                        className="w-16 bg-white/5 border border-white/10 rounded-lg px-2 py-1.5 text-sm text-white text-center focus:border-primary/50 focus:outline-none"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Coordinates font size */}
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <label className="text-xs font-medium text-muted-foreground">Coordinates font size</label>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] font-mono text-muted-foreground bg-white/5 px-1.5 py-0.5 rounded border border-white/5">
+                          {coordSizeOverride ?? Math.round(Math.max(6, posterWidth * 0.026))}px
+                        </span>
+                        {coordSizeOverride !== null && (
+                          <button onClick={() => setCoordSizeOverride(null)} className="text-[9px] font-bold tracking-widest text-muted-foreground hover:text-white uppercase border border-white/5 bg-white/5 px-2 py-0.5 rounded transition-all">Auto</button>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <input
+                        type="range" min="4" max="100" step="1"
+                        value={coordSizeOverride ?? Math.round(Math.max(6, posterWidth * 0.026))}
+                        onChange={(e) => setCoordSizeOverride(parseInt(e.target.value))}
+                        className="flex-1 h-1.5 rounded-full appearance-none cursor-pointer accent-primary"
+                        style={{ background: `linear-gradient(to right, var(--primary) 0%, var(--primary) ${(((coordSizeOverride ?? Math.round(Math.max(6, posterWidth * 0.026))) - 4) / 96) * 100}%, rgba(255,255,255,0.1) ${(((coordSizeOverride ?? Math.round(Math.max(6, posterWidth * 0.026))) - 4) / 96) * 100}%, rgba(255,255,255,0.1) 100%)` }}
+                      />
+                      <input
+                        type="number" min="4" max="500"
+                        value={coordSizeOverride ?? Math.round(Math.max(6, posterWidth * 0.026))}
+                        onChange={(e) => { const v = parseInt(e.target.value); if (!isNaN(v) && v >= 4) setCoordSizeOverride(v); }}
+                        className="w-16 bg-white/5 border border-white/10 rounded-lg px-2 py-1.5 text-sm text-white text-center focus:border-primary/50 focus:outline-none"
+                      />
                     </div>
                   </div>
 
@@ -1707,26 +1819,43 @@ const MapPoster = () => {
               )}
 
               {showPosterText && (
-                <div className="absolute bottom-12 left-0 w-full flex flex-col items-center justify-center z-20 pointer-events-none">
+                <div className="absolute bottom-[8%] left-0 w-full flex flex-col items-center justify-center z-20 pointer-events-none px-[6%]">
                   <h2
-                    className="text-3xl sm:text-4xl leading-none font-bold tracking-[0.25em] mb-4 text-center mx-4"
-                    style={{ color: currentColors['Text'], fontFamily: selectedFont }}
+                    className="leading-none font-bold text-center w-full"
+                    style={{
+                      color: currentColors['Text'],
+                      fontFamily: selectedFont,
+                      fontSize: `${fontSizeOverride ?? Math.max(12, posterWidth * 0.09)}px`,
+                      letterSpacing: '0.18em',
+                      marginBottom: `${posterWidth * 0.025}px`,
+                      wordBreak: 'break-word',
+                      overflowWrap: 'break-word',
+                    }}
                     suppressHydrationWarning
                   >
                     {locName}
                   </h2>
 
                   <p
-                    className="text-sm sm:text-base font-black tracking-[0.6em] text-center opacity-80 mb-3"
-                    style={{ color: currentColors['Text'] }}
+                    className="font-black text-center opacity-80"
+                    style={{
+                      color: currentColors['Text'],
+                      fontSize: `${countrySizeOverride ?? Math.max(8, posterWidth * 0.038)}px`,
+                      letterSpacing: '0.5em',
+                      marginBottom: `${posterWidth * 0.018}px`,
+                    }}
                     suppressHydrationWarning
                   >
                     {locCountry}
                   </p>
 
                   <p
-                    className="text-[10px] tracking-[0.2em] font-mono"
-                    style={{ color: `${currentColors['Text']}b3` }}
+                    className="font-mono text-center"
+                    style={{
+                      color: `${currentColors['Text']}b3`,
+                      fontSize: `${coordSizeOverride ?? Math.max(6, posterWidth * 0.026)}px`,
+                      letterSpacing: '0.15em',
+                    }}
                     suppressHydrationWarning
                   >
                     {Math.abs(mapCenter[1]).toFixed(4)}° {mapCenter[1] >= 0 ? 'N' : 'S'} / {Math.abs(mapCenter[0]).toFixed(4)}° {mapCenter[0] >= 0 ? 'E' : 'W'}
