@@ -742,9 +742,18 @@ const MapPoster = () => {
   const handleDownload = useCallback(async () => {
     if (!posterRef.current || !mapRef.current) return;
 
+    // Detect mobile to apply safety limits
+    const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+    
+    // Safety check for mobile resolution
+    if (isMobile && (exportResolution === '6k' || exportResolution === '8k')) {
+      const proceed = confirm('Extremely high resolutions (6K/8K) may cause your mobile browser to crash or produce a corrupted image. Would you like to proceed anyway? (2K/4K is recommended for mobile)');
+      if (!proceed) return;
+    }
+
     setExportLoading(true);
     setExportProgress(0);
-    setExportStatus('CAPTURING MAP...');
+    setExportStatus('PREPARING ASSETS...');
 
     const glCanvas = mapRef.current.getCanvas();
     const mapLayer = posterRef.current.querySelector('#map-capture-layer') as HTMLElement | null;
@@ -752,12 +761,24 @@ const MapPoster = () => {
     let proxyImg: HTMLImageElement | null = null;
 
     try {
-      await (document as any).fonts?.ready.catch(() => { });
+      // 1. Ensure all fonts are absolutely ready
+      setExportStatus('LOADING FONTS...');
+      if ('fonts' in document) {
+        await (document as any).fonts.ready;
+      }
+      await new Promise(r => setTimeout(r, 500)); // Brief pause for layout settling
       setExportProgress(20);
 
-      // Force a render and capture the frame synchronously inside the render callback
+      // 2. Capture Map GL Layer
+      setExportStatus('CAPTURING MAP...');
       const mapDataUrl = await new Promise<string>((resolve) => {
+        // We use a slightly more robust timeout for mobile
+        const timeout = setTimeout(() => {
+          try { resolve(glCanvas.toDataURL('image/png')); } catch { resolve(''); }
+        }, 1500);
+
         mapRef.current!.once('render', () => {
+          clearTimeout(timeout);
           try {
             resolve(glCanvas.toDataURL('image/png'));
           } catch {
@@ -765,29 +786,29 @@ const MapPoster = () => {
           }
         });
         mapRef.current!.triggerRepaint();
-        setTimeout(() => {
-          try { resolve(glCanvas.toDataURL('image/png')); } catch { resolve(''); }
-        }, 1000);
       });
 
       setExportProgress(50);
       setExportStatus('COMPOSITING...');
 
-      if (mapDataUrl && mapDataUrl.length > 5000 && mapLayer) {
+      if (mapDataUrl && mapDataUrl.length > 1000 && mapLayer) {
         proxyImg = new Image();
+        proxyImg.crossOrigin = "anonymous";
         await new Promise<void>(res => {
           proxyImg!.onload = () => res();
           proxyImg!.onerror = () => res();
           proxyImg!.src = mapDataUrl;
         });
-        proxyImg.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:5;';
+        proxyImg.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:5;pointer-events:none;';
         if (mapCanvasEl) mapCanvasEl.style.visibility = 'hidden';
         mapLayer.appendChild(proxyImg);
+        
+        // Let the DOM update
         await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
       }
 
       setExportProgress(75);
-      setExportStatus('RENDERING...');
+      setExportStatus('RENDERING FINAL IMAGE...');
 
       const resolutionMap = { '1k': 1024, '2k': 2048, '4k': 4096, '6k': 6144, '8k': 8192 };
       const targetLongEdge = resolutionMap[exportResolution];
@@ -805,20 +826,23 @@ const MapPoster = () => {
         outW = Math.round(targetLongEdge * aspect);
       }
 
-      const pixelRatio = outW / posterW;
-
-      let dataUrl = '';
-      const exportFn = exportFormat === 'jpg' ? toJpeg : toPng;
-      const exportOpts = exportFormat === 'jpg' ? { quality: 0.97 } : {};
-
+      // CRITICAL FIX: Do NOT use pixelRatio if canvasWidth/Height are explicitly set.
+      // html-to-image uses canvasWidth/Height as the ACTUAL size.
+      // If we also provide pixelRatio, it often scales again internally, 
+      // leading to 10k+ pixel canvases on mobile which causes the noise artifact.
       const baseOpts = {
         width: posterW,
         height: posterH,
         canvasWidth: outW,
         canvasHeight: outH,
-        pixelRatio,
+        // pixelRatio: 1, // Explicitly 1 to avoid auto-calculation glitches
+        style: {
+          transform: 'scale(1)',
+          transformOrigin: 'top left',
+        },
         cacheBust: true,
-        ...exportOpts,
+        fontEmbedCSS: '', // Reduce SVG size if possible
+        ... (exportFormat === 'jpg' ? { quality: 0.95 } : {}),
         filter: (node: Element) => {
           if (node === mapCanvasEl) return false;
           if (node.tagName === 'LINK' && (node as HTMLLinkElement).rel === 'stylesheet') {
@@ -828,13 +852,18 @@ const MapPoster = () => {
         },
       };
 
+      let dataUrl = '';
+      const exportFn = exportFormat === 'jpg' ? toJpeg : toPng;
+
       try {
         dataUrl = await exportFn(posterRef.current, baseOpts);
-      } catch {
+      } catch (err) {
+        console.warn('Primary export failed, attempting recovery mode...', err);
+        // Fallback for extremely memory-constrained devices
         dataUrl = await exportFn(posterRef.current, {
-          pixelRatio,
           cacheBust: true,
-          ...exportOpts,
+          width: posterW,
+          height: posterH,
           filter: (node: Element) => node !== mapCanvasEl,
         });
       }
@@ -854,7 +883,7 @@ const MapPoster = () => {
       setPreviewDataUrl(dataUrl);
     } catch (err) {
       console.error('Export error:', err);
-      alert('Failed to generate image. Please try again.');
+      alert('Failed to generate image. Your device might be low on memory for this resolution.');
     } finally {
       if (proxyImg && mapLayer) { try { mapLayer.removeChild(proxyImg); } catch { } }
       if (mapCanvasEl) mapCanvasEl.style.visibility = '';
