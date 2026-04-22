@@ -1,108 +1,105 @@
 # 🗺️ Cartographic Studio
 
-[![Next.js](https://img.shields.io/badge/Next.js-16-black?style=for-the-badge&logo=next.js)](https://nextjs.org/)
-[![React](https://img.shields.io/badge/React-19-blue?style=for-the-badge&logo=react)](https://react.dev/)
-[![MapLibre](https://img.shields.io/badge/MapLibre-GL-yellow?style=for-the-badge&logo=maplibre)](https://maplibre.org/)
-[![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-4.0-38B2AC?style=for-the-badge&logo=tailwind-css)](https://tailwindcss.com/)
+<p align="center">
+  <img src="https://img.shields.io/badge/Next.js-16-black?style=for-the-badge&logo=next.js" alt="Next.js" />
+  <img src="https://img.shields.io/badge/React-19-61DAFB?style=for-the-badge&logo=react&logoColor=black" alt="React" />
+  <img src="https://img.shields.io/badge/MapLibre-GL-blue?style=for-the-badge&logo=maplibre" alt="MapLibre" />
+  <img src="https://img.shields.io/badge/Tailwind_CSS-4.0-38B2AC?style=for-the-badge&logo=tailwind-css" alt="Tailwind CSS" />
+  <img src="https://img.shields.io/badge/TypeScript-5.7-3178C6?style=for-the-badge&logo=typescript" alt="TypeScript" />
+</p>
 
-**Cartographic Studio** is an interactive map design studio built with Next.js and MapLibre GL. It allows creators to build custom map posters, wallpapers, and social assets with full visual control and export-ready output.
+**Cartographic Studio** is a high-fidelity, professional-grade map design studio. Built with Next.js 16 and MapLibre GL, it empowers creators to design stunning map posters, wallpapers, and social media assets with granular control over every visual layer.
 
-**[🚀 Try Live Demo](https://cartographic-studio.vercel.app/)**
+**[🚀 Live Demo](https://cartographic-studio.vercel.app/)**
 
 ---
 
-## ✨ Features
+## ✨ Key Highlights
 
-- Interactive map styling with custom color controls
-- Print-ready poster layouts (A1–A5, US Letter)
-- Social media formats for Instagram and Stories
-- Layer visibility controls for roads, buildings, parks, and more
-- Reverse geocoding for dynamic location labels
-- High-resolution export using `html-to-image`
-- Responsive UI for desktop and mobile
+- **🎨 300+ Professional Themes**: A massive collection of curated palettes, from *Midnight Blue* luxury atlas aesthetics to *Neon City* cyberpunk vibes.
+- **🖼️ High-Resolution Export Engine**: Support for up to **8K resolution** exports with embedded **DPI metadata** (300 DPI) for print-ready perfection.
+- **📐 Precise Layout Control**: Over 50+ predefined layouts including ISO A-series (A0-A6), US Paper, Social Media formats (Instagram, Reels, X), and Digital Screen sizes (4K, Ultrawide, Mobile).
+- **🔬 Advanced Map Engine**: Powered by **OpenFreeMap** planet vector tiles with custom "Over-Zoom" rendering logic that captures 5.5x more detail than standard web maps.
+- **🛡️ Hardened Reliability**: Synchronized export pipeline that ensures fonts, map textures, and UI elements are perfectly rendered before the final download.
+- **📍 Dynamic Geocoding**: Real-time reverse geocoding using Photon, automatically updating location labels as you explore.
 
 ---
 
 ## 🚀 Tech Stack
 
-- **Next.js 16**
-- **React 19**
-- **TypeScript**
-- **MapLibre GL**
-- **Tailwind CSS 4**
-- **Radix UI**
-- **Lucide Icons**
-- **html-to-image**
+- **Core Engine**: [Next.js 16](https://nextjs.org/) (App Router) & [React 19](https://react.dev/)
+- **Mapping**: [MapLibre GL JS](https://maplibre.org/) with [OpenFreeMap](https://openfreemap.org/)
+- **Styling**: [Tailwind CSS 4.0](https://tailwindcss.com/) & [Radix UI](https://www.radix-ui.com/)
+- **Icons**: [Lucide React](https://lucide.dev/)
+- **Export**: [html-to-image](https://github.com/bubkoo/html-to-image) with custom DPI injection logic
+- **Geocoding**: [Photon API](https://photon.komoot.io/)
 
 ---
 
 ## 🛠️ Getting Started
 
-### Requirements
+### Prerequisites
 
 - Node.js (Latest LTS recommended)
-- `npm` or `pnpm`
+- `pnpm` (recommended), `npm`, or `yarn`
 
-### Install
+### Installation
 
 ```bash
+# Clone the repository
 git clone <repository-url>
+
+# Navigate to the project directory
 cd map
+
+# Install dependencies
 pnpm install
 ```
 
-### Run locally
+### Development
 
 ```bash
 pnpm dev
 ```
 
-Then open [http://localhost:3000](http://localhost:3000).
+Open [http://localhost:3000](http://localhost:3000) to start designing.
 
 ---
 
-## 📦 Available Scripts
+## 🧭 Under the Hood
 
-- `pnpm dev` — start development server
-- `pnpm build` — build production app
-- `pnpm start` — serve production build
-- `pnpm lint` — run ESLint
+### High-Fidelity Rendering
+Unlike standard screenshot tools, Cartographic Studio uses an **Over-Zoom** technique. The map is rendered in a hidden high-resolution canvas (5.5x scale) before being composited, ensuring that small details like street names and building outlines remain crisp even in 8K exports.
 
-> If you prefer `npm`, use `npm install`, `npm run dev`, etc.
+### DPI Embedding
+For professional printing, images require DPI metadata. Our engine manually injects the `pHYs` (Physical pixel dimensions) chunk into the PNG data stream, ensuring printers correctly interpret the image's physical scale.
 
----
-
-## 🧭 Usage
-
-1. Search for a location in the search bar.
-2. Choose a theme and adjust map styles.
-3. Select a layout format in the Layout section.
-4. Change layer visibility and map detail.
-5. Export the final design.
+### Tile Proxying
+To prevent CORS "tainting" of the canvas (which blocks exports), all map tiles and fonts are proxied through a local API route (`/api/tiles`), ensuring same-origin compliance.
 
 ---
 
 ## 📁 Project Structure
 
-- `app/` — Next.js app routes and layout
-- `components/` — UI and map components
-- `hooks/` — reusable React hooks
-- `lib/` — utility functions
-- `app/api/` — local API routes for tile proxying
-- `styles/` — global styling
-
----
-
-## 💡 Notes
-
-- Map tiles are proxied through `/api/tiles` for same-origin loading.
-- Reverse geocoding updates the location label when the map stops moving.
-- The project is currently set as private.
+```text
+├── app/
+│   ├── api/tiles/     # Tile proxy for CORS stabilization
+│   ├── layout.tsx     # Global providers and meta tags
+│   └── page.tsx       # Main Entry point
+├── components/
+│   ├── map-poster.tsx # The CORE Studio Component (120KB+ of logic)
+│   ├── ui/            # Radix-based UI system
+│   └── map/           # MapLibre wrapper components
+├── lib/
+│   ├── map-style.ts   # Dynamic StyleSpecification generator
+│   └── utils.ts       # Tailored utility functions
+└── public/            # Static assets and fonts
+```
 
 ---
 
 ## 📄 License
 
-All rights reserved.
+All rights reserved. Internal project for Cartographic Studio.
 
 <p align="center">Built with ❤️ by Kanishk Kumar Singh.</p>
