@@ -5,7 +5,8 @@ import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react'
 import {
   Download, MapPin, Palette, Layout as LayoutIcon, Brush,
   Layers, MapPin as MarkerIcon, Settings, Crosshair,
-  Search, X, Lock as LockIcon, RefreshCw, ZoomIn, ZoomOut
+  Search, X, Lock as LockIcon, RefreshCw, ZoomIn, ZoomOut,
+  Github, Coffee
 } from 'lucide-react';
 import { Map, MapMarker, MarkerContent } from '@/components/ui/map';
 import { ExportProgress } from '@/components/ui/export-progress';
@@ -156,7 +157,7 @@ function PosterMarkerOverlay({
 }
 
 const MapPoster = () => {
-  const [activeTab, setActiveTab] = useState('theme'); // Default to theme to see changes
+  const [activeTab, setActiveTab] = useState('');
   const [exportLoading, setExportLoading] = useState(false);
   const [exportProgress, setExportProgress] = useState(0);
   const [exportStatus, setExportStatus] = useState('');
@@ -170,7 +171,7 @@ const MapPoster = () => {
   const bgMapRef = useRef<any>(null);
   const posterRef = useRef<HTMLDivElement>(null);
   const [zoom, setZoom] = useState(14.9);
-  const [mapCenter, setMapCenter] = useState<[number, number]>([77.4402, 12.6408]);
+  const [mapCenter, setMapCenter] = useState<[number, number]>([77.2295, 28.6139]);
   const [locName, setLocName] = useState('DELHI');
   const [locCountry, setLocCountry] = useState('INDIA');
   const [bearing, setBearing] = useState(0);
@@ -182,6 +183,8 @@ const MapPoster = () => {
   const [fontSizeOverride, setFontSizeOverride] = useState<number | null>(null); // null = auto
   const [countrySizeOverride, setCountrySizeOverride] = useState<number | null>(null);
   const [coordSizeOverride, setCoordSizeOverride] = useState<number | null>(null);
+  const [textSpacingOverride, setTextSpacingOverride] = useState<number | null>(null);
+  const [showHUD, setShowHUD] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchLoading, setSearchLoading] = useState(false);
   const [isTextManual, setIsTextManual] = useState(false);
@@ -281,6 +284,47 @@ const MapPoster = () => {
     { id: 'desert-oasis', name: 'DESERT', description: 'Sandy gold with teal oasis accents', colors: ['#f5e6c8', '#e8d0a8', '#8b6914', '#2dd4bf', '#0d9488'] },
     { id: 'emerald-city', name: 'EMERALD CITY', description: 'Deep dark green with bright emerald roads and mint accents', colors: ['#040d08', '#020805', '#f0fdfa', '#065f46', '#10b981'] },
     { id: 'lavender-mist', name: 'LAVENDER', description: 'Deep purple with glowing violet roads', colors: ['#1a0a30', '#0d0518', '#a78bfa', '#7c3aed', '#6d28d9'] },
+    { id: 'onyx-gold', name: 'ONYX & GOLD', description: 'Luxurious black with shimmering gold infrastructure', colors: ['#0a0a0a', '#000000', '#d4af37', '#1a1a1a', '#aa8a2e'] },
+    { id: 'cyber-yellow', name: 'CYBER YELLOW', description: 'Industrial high-contrast yellow with dark tech roads', colors: ['#fcd34d', '#fbbf24', '#000000', '#f59e0b', '#1e293b'] },
+    { id: 'mars-explorer', name: 'MARS EXPLORER', description: 'Martian rust and dust with glowing orange paths', colors: ['#451804', '#2b0f02', '#ea580c', '#7c2d12', '#f97316'] },
+    { id: 'retro-surge', name: 'RETRO SURGE', description: '80s synthwave aesthetics with neon purple and cyan', colors: ['#240b36', '#0c0211', '#ff00ff', '#3d1b5d', '#00e5ff'] },
+    { id: 'deep-jungle', name: 'DEEP JUNGLE', description: 'Moody forest depths with vibrant green highlights', colors: ['#052e16', '#022c22', '#4ade80', '#14532d', '#166534'] },
+    { id: 'rose-noir', name: 'ROSE NOIR', description: 'Midnight mood with soft rose and crimson details', colors: ['#1e1b1b', '#141212', '#fda4af', '#3f3f46', '#f43f5e'] },
+    { id: 'gunmetal', name: 'GUNMETAL', description: 'Sleek monochromatic industrial zinc and titanium', colors: ['#27272a', '#18181b', '#fafafa', '#52525b', '#a1a1aa'] },
+    { id: 'dracula', name: 'DRACULA', description: 'The classic dark developer palette with gothic tones', colors: ['#282a36', '#191a21', '#ff79c6', '#44475a', '#bd93f9'] },
+    { id: 'tokyo-night', name: 'TOKYO NIGHT', description: 'Soft neon city lights with deep indigo and violet', colors: ['#1a1b26', '#16161e', '#7aa2f7', '#24283b', '#bb9af7'] },
+    { id: 'cappuccino', name: 'CAPPUCCINO', description: 'Warm, professional stone and crema tones', colors: ['#fafaf9', '#e7e5e4', '#57534e', '#d6d3d1', '#a8a29e'] },
+    { id: 'neon-blueprint', name: 'NEON BLUEPRINT', description: 'Technical cyan on deep architecture blue', colors: ['#041020', '#020814', '#22d3ee', '#1e3a5f', '#06b6d4'] },
+    { id: 'autumn-ridge', name: 'AUTUMN RIDGE', description: 'Warm harvest oranges and earthy woodland browns', colors: ['#fef3c7', '#fde68a', '#b45309', '#d97706', '#92400e'] },
+    { id: 'glacier-ice', name: 'GLACIER ICE', description: 'Frozen white background with pale arctic blue highlights', colors: ['#f0f9ff', '#e0f2fe', '#0369a1', '#7dd3fc', '#0ea5e9'] },
+    { id: 'cobalt-night', name: 'COBALT NIGHT', description: 'Deep royal blue with shimmering silver infrastructure', colors: ['#001f3f', '#001021', '#f8fafc', '#1e3a5f', '#94a3b8'] },
+    { id: 'charcoal-mint', name: 'CHARCOAL MINT', description: 'Sophisticated charcoal with fresh electric mint roads', colors: ['#18181b', '#09090b', '#4ade80', '#27272a', '#22c55e'] },
+    { id: 'amethyst', name: 'AMETHYST', description: 'Vibrant purple spectrum from deep iris to bright violet', colors: ['#1e1b4b', '#17171e', '#a855f7', '#312e81', '#7c3aed'] },
+    { id: 'paperback', name: 'PAPERBACK', description: 'Textured cream background with classic navy ink details', colors: ['#f5f5f4', '#e7e5e4', '#1e3a8a', '#d6d3d1', '#1d4ed8'] },
+    { id: 'crimson-tide', name: 'CRIMSON TIDE', description: 'Bold blood red paths on a pitch black foundation', colors: ['#000000', '#0a0a0a', '#dc2626', '#1a1a1a', '#991b1b'] },
+    { id: 'slate-lime', name: 'SLATE LIME', description: 'Modern professional slate with hyper-visible lime accents', colors: ['#334155', '#1e293b', '#bef264', '#475569', '#84cc16'] },
+    { id: 'sahara-dust', name: 'SAHARA DUST', description: 'Scorched earth tones with heat-baked orange infrastructure', colors: ['#fef3c7', '#fde68a', '#78350f', '#d97706', '#b45309'] },
+    { id: 'earth-natural', name: 'EARTH NATURAL', description: 'Rich forest greens with deep Atlantic blue waters', colors: ['#2d5a27', '#1e3a5f', '#ffffff', '#78716c', '#000000'] },
+    { id: 'earth-vibrant', name: 'EARTH VIBRANT', description: 'Vibrant grass greens with tropical teal waters', colors: ['#4c9b2f', '#00a8cc', '#000000', '#cbd5e1', '#111111'] },
+    { id: 'ocean-blueprint', name: 'OCEAN DEPTHS', description: 'Deep oceanic blues with shimmering silver infrastructure', colors: ['#082f49', '#0c4a6e', '#f8fafc', '#075985', '#94a3b8'] },
+    { id: 'high-country', name: 'HIGH COUNTRY', description: 'Rugged alpine tones with glacial lakes and dark paths', colors: ['#475569', '#a5dff2', '#ffffff', '#334155', '#1e293b'] },
+    { id: 'urban-modern', name: 'URBAN MODERN', description: 'Professional architectural slate with charcoal accents', colors: ['#f8fafc', '#cbd5e1', '#0f172a', '#94a3b8', '#334155'] },
+    { id: 'desert-rose', name: 'DESERT ROSE', description: 'Sun-baked sands with terracotta and dusk sky accents', colors: ['#fef3c7', '#7dd3fc', '#92400e', '#d97706', '#451a03'] },
+    { id: 'amazon-prime', name: 'AMAZONAS', description: 'Lush tropical jungle with deep river silt water', colors: ['#064e3b', '#2b1d0e', '#ffffff', '#14532d', '#000000'] },
+    { id: 'arctic-rim', name: 'ARCTIC RIM', description: 'Frozen tundra whites with deep navy waters', colors: ['#f8fafc', '#1e3a8a', '#000000', '#cbd5e1', '#0f172a'] },
+    { id: 'lunar-base', name: 'LUNAR BASE', description: 'Monochromatic moon surface with scientific cyan highlights', colors: ['#27272a', '#18181b', '#22d3ee', '#52525b', '#06b6d4'] },
+    { id: 'vintage-gold', name: 'VINTAGE LUXE', description: 'Aged cream with elegant gold and black details', colors: ['#fefce8', '#e2e8f0', '#854d0e', '#fef9c3', '#000000'] },
+    { id: 'blueprint-pro', name: 'DRAFTING ROOM', description: 'Classic architectural blueprint with white technical lines', colors: ['#1e3a8a', '#172554', '#ffffff', '#1e40af', '#60a5fa'] },
+    { id: 'obsidian-neo', name: 'OBSIDIAN NEO', description: 'Pure black with electric violet glowing roads', colors: ['#09090b', '#000000', '#a855f7', '#27272a', '#7c3aed'] },
+    { id: 'serene-mint', name: 'SERENE MINT', description: 'Fresh mint and stone tones for a clean aesthetic', colors: ['#f0fdf4', '#ecfeff', '#166534', '#dcfce7', '#15803d'] },
+    { id: 'lava-flow', name: 'MAGMA', description: 'Dark basalt with glowing orange and red lava veins', colors: ['#09090b', '#000000', '#ea580c', '#27272a', '#dc2626'] },
+    { id: 'slate-minimal', name: 'SLATE MINIMAL', description: 'Ultra-clean graphite and white for modern spaces', colors: ['#f9fafb', '#f3f4f6', '#111827', '#e5e7eb', '#374151'] },
+    { id: 'terracotta-sun', name: 'TERRACOTTA', description: 'Warm sun-baked clay with slate-blue water', colors: ['#fff7ed', '#e0f2fe', '#9a3412', '#fed7aa', '#c2410c'] },
+    { id: 'royal-navy', name: 'ROYAL NAVY', description: 'Formal navy and gold for desktop/stately posters', colors: ['#0f172a', '#1e3a8a', '#eab308', '#334155', '#ca8a04'] },
+    { id: 'copper-mine', name: 'COPPER MINE', description: 'Industrial oxidized copper with dark earth tones', colors: ['#451a03', '#2a1f11', '#b45309', '#78350f', '#ea580c'] },
+    { id: 'sakura-night', name: 'SAKURA NIGHT', description: 'Nighttime Tokyo with soft pink and indigo accents', colors: ['#1e1b4b', '#17171e', '#fda4af', '#312e81', '#f43f5e'] },
+    { id: 'forest-trail', name: 'FOREST TRAIL', description: 'Deep woodland greens with natural soil-colored roads', colors: ['#065f46', '#1e3a8a', '#ffffff', '#064e3b', '#451a03'] },
+    { id: 'titanium', name: 'TITANIUM', description: 'Sleek metallic grays with high-visibility black roads', colors: ['#52525b', '#3f3f46', '#ffffff', '#71717a', '#000000'] },
   ];
 
   const colorLabels = [
@@ -319,70 +363,93 @@ const MapPoster = () => {
 
   const layouts = [
     // ISO A-series Portrait (exact mm ratios)
-    { id: 'a0-portrait',  category: 'PRINT — ISO A',    name: 'A0 PORTRAIT',         dims: '841 × 1189 MM', aspect: 841 / 1189 },
-    { id: 'a1-portrait',  category: 'PRINT — ISO A',    name: 'A1 PORTRAIT',         dims: '594 × 841 MM',  aspect: 594 / 841 },
-    { id: 'a2-portrait',  category: 'PRINT — ISO A',    name: 'A2 PORTRAIT',         dims: '420 × 594 MM',  aspect: 420 / 594 },
-    { id: 'a3-portrait',  category: 'PRINT — ISO A',    name: 'A3 PORTRAIT',         dims: '297 × 420 MM',  aspect: 297 / 420 },
-    { id: 'a4-portrait',  category: 'PRINT — ISO A',    name: 'A4 PORTRAIT',         dims: '210 × 297 MM',  aspect: 210 / 297 },
-    { id: 'a5-portrait',  category: 'PRINT — ISO A',    name: 'A5 PORTRAIT',         dims: '148 × 210 MM',  aspect: 148 / 210 },
-    { id: 'a6-portrait',  category: 'PRINT — ISO A',    name: 'A6 PORTRAIT',         dims: '105 × 148 MM',  aspect: 105 / 148 },
+    { id: 'a0-portrait', category: 'PRINT — ISO A', name: 'A0 PORTRAIT', dims: '841 × 1189 MM', aspect: 841 / 1189 },
+    { id: 'a1-portrait', category: 'PRINT — ISO A', name: 'A1 PORTRAIT', dims: '594 × 841 MM', aspect: 594 / 841 },
+    { id: 'a2-portrait', category: 'PRINT — ISO A', name: 'A2 PORTRAIT', dims: '420 × 594 MM', aspect: 420 / 594 },
+    { id: 'a3-portrait', category: 'PRINT — ISO A', name: 'A3 PORTRAIT', dims: '297 × 420 MM', aspect: 297 / 420 },
+    { id: 'a4-portrait', category: 'PRINT — ISO A', name: 'A4 PORTRAIT', dims: '210 × 297 MM', aspect: 210 / 297 },
+    { id: 'a5-portrait', category: 'PRINT — ISO A', name: 'A5 PORTRAIT', dims: '148 × 210 MM', aspect: 148 / 210 },
+    { id: 'a6-portrait', category: 'PRINT — ISO A', name: 'A6 PORTRAIT', dims: '105 × 148 MM', aspect: 105 / 148 },
     // ISO A-series Landscape
-    { id: 'a0-landscape', category: 'PRINT — ISO A',    name: 'A0 LANDSCAPE',        dims: '1189 × 841 MM', aspect: 1189 / 841 },
-    { id: 'a1-landscape', category: 'PRINT — ISO A',    name: 'A1 LANDSCAPE',        dims: '841 × 594 MM',  aspect: 841 / 594 },
-    { id: 'a2-landscape', category: 'PRINT — ISO A',    name: 'A2 LANDSCAPE',        dims: '594 × 420 MM',  aspect: 594 / 420 },
-    { id: 'a3-landscape', category: 'PRINT — ISO A',    name: 'A3 LANDSCAPE',        dims: '420 × 297 MM',  aspect: 420 / 297 },
-    { id: 'a4-landscape', category: 'PRINT — ISO A',    name: 'A4 LANDSCAPE',        dims: '297 × 210 MM',  aspect: 297 / 210 },
+    { id: 'a0-landscape', category: 'PRINT — ISO A', name: 'A0 LANDSCAPE', dims: '1189 × 841 MM', aspect: 1189 / 841 },
+    { id: 'a1-landscape', category: 'PRINT — ISO A', name: 'A1 LANDSCAPE', dims: '841 × 594 MM', aspect: 841 / 594 },
+    { id: 'a2-landscape', category: 'PRINT — ISO A', name: 'A2 LANDSCAPE', dims: '594 × 420 MM', aspect: 594 / 420 },
+    { id: 'a3-landscape', category: 'PRINT — ISO A', name: 'A3 LANDSCAPE', dims: '420 × 297 MM', aspect: 420 / 297 },
+    { id: 'a4-landscape', category: 'PRINT — ISO A', name: 'A4 LANDSCAPE', dims: '297 × 210 MM', aspect: 297 / 210 },
     // ISO B-series Portrait
-    { id: 'b1-portrait',  category: 'PRINT — ISO B',    name: 'B1 PORTRAIT',         dims: '707 × 1000 MM', aspect: 707 / 1000 },
-    { id: 'b2-portrait',  category: 'PRINT — ISO B',    name: 'B2 PORTRAIT',         dims: '500 × 707 MM',  aspect: 500 / 707 },
-    { id: 'b3-portrait',  category: 'PRINT — ISO B',    name: 'B3 PORTRAIT',         dims: '353 × 500 MM',  aspect: 353 / 500 },
-    { id: 'b4-portrait',  category: 'PRINT — ISO B',    name: 'B4 PORTRAIT',         dims: '250 × 353 MM',  aspect: 250 / 353 },
-    { id: 'b5-portrait',  category: 'PRINT — ISO B',    name: 'B5 PORTRAIT',         dims: '176 × 250 MM',  aspect: 176 / 250 },
+    { id: 'b1-portrait', category: 'PRINT — ISO B', name: 'B1 PORTRAIT', dims: '707 × 1000 MM', aspect: 707 / 1000 },
+    { id: 'b2-portrait', category: 'PRINT — ISO B', name: 'B2 PORTRAIT', dims: '500 × 707 MM', aspect: 500 / 707 },
+    { id: 'b3-portrait', category: 'PRINT — ISO B', name: 'B3 PORTRAIT', dims: '353 × 500 MM', aspect: 353 / 500 },
+    { id: 'b4-portrait', category: 'PRINT — ISO B', name: 'B4 PORTRAIT', dims: '250 × 353 MM', aspect: 250 / 353 },
+    { id: 'b5-portrait', category: 'PRINT — ISO B', name: 'B5 PORTRAIT', dims: '176 × 250 MM', aspect: 176 / 250 },
     // US Paper
-    { id: 'us-letter',    category: 'PRINT — US',       name: 'LETTER',              dims: '8.5 × 11 IN',   aspect: 8.5 / 11 },
-    { id: 'us-legal',     category: 'PRINT — US',       name: 'LEGAL',               dims: '8.5 × 14 IN',   aspect: 8.5 / 14 },
-    { id: 'us-tabloid',   category: 'PRINT — US',       name: 'TABLOID / B',         dims: '11 × 17 IN',    aspect: 11 / 17 },
-    { id: 'us-letter-ls', category: 'PRINT — US',       name: 'LETTER LANDSCAPE',    dims: '11 × 8.5 IN',   aspect: 11 / 8.5 },
+    { id: 'us-letter', category: 'PRINT — US', name: 'LETTER', dims: '8.5 × 11 IN', aspect: 8.5 / 11 },
+    { id: 'us-legal', category: 'PRINT — US', name: 'LEGAL', dims: '8.5 × 14 IN', aspect: 8.5 / 14 },
+    { id: 'us-tabloid', category: 'PRINT — US', name: 'TABLOID / B', dims: '11 × 17 IN', aspect: 11 / 17 },
+    { id: 'us-letter-ls', category: 'PRINT — US', name: 'LETTER LANDSCAPE', dims: '11 × 8.5 IN', aspect: 11 / 8.5 },
     // Poster / Large Format
-    { id: 'poster-18x24', category: 'PRINT — POSTER',   name: '18 × 24 IN',          dims: '18 × 24 IN',    aspect: 18 / 24 },
-    { id: 'poster-24x36', category: 'PRINT — POSTER',   name: '24 × 36 IN',          dims: '24 × 36 IN',    aspect: 24 / 36 },
-    { id: 'poster-27x40', category: 'PRINT — POSTER',   name: '27 × 40 IN (MOVIE)',  dims: '27 × 40 IN',    aspect: 27 / 40 },
-    { id: 'poster-36x48', category: 'PRINT — POSTER',   name: '36 × 48 IN',          dims: '36 × 48 IN',    aspect: 36 / 48 },
-    { id: 'poster-50x70', category: 'PRINT — POSTER',   name: '50 × 70 CM',          dims: '500 × 700 MM',  aspect: 500 / 700 },
+    { id: 'poster-18x24', category: 'PRINT — POSTER', name: '18 × 24 IN', dims: '18 × 24 IN', aspect: 18 / 24 },
+    { id: 'poster-24x36', category: 'PRINT — POSTER', name: '24 × 36 IN', dims: '24 × 36 IN', aspect: 24 / 36 },
+    { id: 'poster-27x40', category: 'PRINT — POSTER', name: '27 × 40 IN (MOVIE)', dims: '27 × 40 IN', aspect: 27 / 40 },
+    { id: 'poster-36x48', category: 'PRINT — POSTER', name: '36 × 48 IN', dims: '36 × 48 IN', aspect: 36 / 48 },
+    { id: 'poster-50x70', category: 'PRINT — POSTER', name: '50 × 70 CM', dims: '500 × 700 MM', aspect: 500 / 700 },
     // Square
-    { id: 'sq-8x8',       category: 'PRINT — SQUARE',   name: '8 × 8 IN',            dims: '8 × 8 IN',      aspect: 1 },
-    { id: 'sq-12x12',     category: 'PRINT — SQUARE',   name: '12 × 12 IN',          dims: '12 × 12 IN',    aspect: 1 },
-    { id: 'sq-20x20',     category: 'PRINT — SQUARE',   name: '20 × 20 CM',          dims: '200 × 200 MM',  aspect: 1 },
+    { id: 'sq-8x8', category: 'PRINT — SQUARE', name: '8 × 8 IN', dims: '8 × 8 IN', aspect: 1 },
+    { id: 'sq-12x12', category: 'PRINT — SQUARE', name: '12 × 12 IN', dims: '12 × 12 IN', aspect: 1 },
+    { id: 'sq-20x20', category: 'PRINT — SQUARE', name: '20 × 20 CM', dims: '200 × 200 MM', aspect: 1 },
     // Social Media
-    { id: 'inst-square',  category: 'SOCIAL MEDIA',     name: 'INSTAGRAM SQUARE',    dims: '1080 × 1080 PX', aspect: 1 },
-    { id: 'inst-port',    category: 'SOCIAL MEDIA',     name: 'INSTAGRAM PORTRAIT',  dims: '1080 × 1350 PX', aspect: 1080 / 1350 },
-    { id: 'inst-land',    category: 'SOCIAL MEDIA',     name: 'INSTAGRAM LANDSCAPE', dims: '1080 × 566 PX',  aspect: 1080 / 566 },
-    { id: 'story',        category: 'SOCIAL MEDIA',     name: 'STORY / REEL (9:16)', dims: '1080 × 1920 PX', aspect: 9 / 16 },
-    { id: 'fb-post',      category: 'SOCIAL MEDIA',     name: 'FACEBOOK POST',       dims: '1200 × 630 PX',  aspect: 1200 / 630 },
-    { id: 'fb-cover',     category: 'SOCIAL MEDIA',     name: 'FACEBOOK COVER',      dims: '820 × 312 PX',   aspect: 820 / 312 },
-    { id: 'twitter-post', category: 'SOCIAL MEDIA',     name: 'X / TWITTER POST',    dims: '1600 × 900 PX',  aspect: 1600 / 900 },
-    { id: 'twitter-head', category: 'SOCIAL MEDIA',     name: 'X / TWITTER HEADER', dims: '1500 × 500 PX',  aspect: 1500 / 500 },
-    { id: 'linkedin-post',category: 'SOCIAL MEDIA',     name: 'LINKEDIN POST',       dims: '1200 × 627 PX',  aspect: 1200 / 627 },
-    { id: 'linkedin-cover',category: 'SOCIAL MEDIA',    name: 'LINKEDIN COVER',      dims: '1584 × 396 PX',  aspect: 1584 / 396 },
-    { id: 'pinterest',    category: 'SOCIAL MEDIA',     name: 'PINTEREST PIN',       dims: '1000 × 1500 PX', aspect: 1000 / 1500 },
-    { id: 'youtube-thumb',category: 'SOCIAL MEDIA',     name: 'YOUTUBE THUMBNAIL',   dims: '1280 × 720 PX',  aspect: 1280 / 720 },
-    { id: 'tiktok',       category: 'SOCIAL MEDIA',     name: 'TIKTOK / SHORTS',     dims: '1080 × 1920 PX', aspect: 9 / 16 },
+    { id: 'inst-square', category: 'SOCIAL MEDIA', name: 'INSTAGRAM SQUARE', dims: '1080 × 1080 PX', aspect: 1 },
+    { id: 'inst-port', category: 'SOCIAL MEDIA', name: 'INSTAGRAM PORTRAIT', dims: '1080 × 1350 PX', aspect: 1080 / 1350 },
+    { id: 'inst-land', category: 'SOCIAL MEDIA', name: 'INSTAGRAM LANDSCAPE', dims: '1080 × 566 PX', aspect: 1080 / 566 },
+    { id: 'story', category: 'SOCIAL MEDIA', name: 'STORY / REEL (9:16)', dims: '1080 × 1920 PX', aspect: 9 / 16 },
+    { id: 'fb-post', category: 'SOCIAL MEDIA', name: 'FACEBOOK POST', dims: '1200 × 630 PX', aspect: 1200 / 630 },
+    { id: 'fb-cover', category: 'SOCIAL MEDIA', name: 'FACEBOOK COVER', dims: '820 × 312 PX', aspect: 820 / 312 },
+    { id: 'twitter-post', category: 'SOCIAL MEDIA', name: 'X / TWITTER POST', dims: '1600 × 900 PX', aspect: 1600 / 900 },
+    { id: 'twitter-head', category: 'SOCIAL MEDIA', name: 'X / TWITTER HEADER', dims: '1500 × 500 PX', aspect: 1500 / 500 },
+    { id: 'linkedin-post', category: 'SOCIAL MEDIA', name: 'LINKEDIN POST', dims: '1200 × 627 PX', aspect: 1200 / 627 },
+    { id: 'linkedin-cover', category: 'SOCIAL MEDIA', name: 'LINKEDIN COVER', dims: '1584 × 396 PX', aspect: 1584 / 396 },
+    { id: 'pinterest', category: 'SOCIAL MEDIA', name: 'PINTEREST PIN', dims: '1000 × 1500 PX', aspect: 1000 / 1500 },
+    { id: 'youtube-thumb', category: 'SOCIAL MEDIA', name: 'YOUTUBE THUMBNAIL', dims: '1280 × 720 PX', aspect: 1280 / 720 },
+    { id: 'tiktok', category: 'SOCIAL MEDIA', name: 'TIKTOK / SHORTS', dims: '1080 × 1920 PX', aspect: 9 / 16 },
     // Digital / Screens
-    { id: 'desktop-fhd',  category: 'DIGITAL',          name: 'DESKTOP FHD',         dims: '1920 × 1080 PX', aspect: 1920 / 1080 },
-    { id: 'desktop-2k',   category: 'DIGITAL',          name: 'DESKTOP 2K (QHD)',    dims: '2560 × 1440 PX', aspect: 2560 / 1440 },
-    { id: 'desktop-4k',   category: 'DIGITAL',          name: 'DESKTOP 4K (UHD)',    dims: '3840 × 2160 PX', aspect: 3840 / 2160 },
-    { id: 'ultrawide',    category: 'DIGITAL',          name: 'ULTRAWIDE 21:9',      dims: '2560 × 1080 PX', aspect: 2560 / 1080 },
-    { id: 'iphone-15',    category: 'DIGITAL',          name: 'IPHONE 15 PRO',       dims: '1179 × 2556 PX', aspect: 1179 / 2556 },
-    { id: 'iphone-plus',  category: 'DIGITAL',          name: 'IPHONE 15 PLUS',      dims: '1290 × 2796 PX', aspect: 1290 / 2796 },
-    { id: 'android-fhd',  category: 'DIGITAL',          name: 'ANDROID FHD+',        dims: '1080 × 2400 PX', aspect: 1080 / 2400 },
-    { id: 'ipad-pro',     category: 'DIGITAL',          name: 'IPAD PRO 12.9"',      dims: '2048 × 2732 PX', aspect: 2048 / 2732 },
-    { id: 'macbook',      category: 'DIGITAL',          name: 'MACBOOK PRO 16"',     dims: '3456 × 2234 PX', aspect: 3456 / 2234 },
+    { id: 'desktop-fhd', category: 'DIGITAL', name: 'DESKTOP FHD', dims: '1920 × 1080 PX', aspect: 1920 / 1080 },
+    { id: 'desktop-2k', category: 'DIGITAL', name: 'DESKTOP 2K (QHD)', dims: '2560 × 1440 PX', aspect: 2560 / 1440 },
+    { id: 'desktop-4k', category: 'DIGITAL', name: 'DESKTOP 4K (UHD)', dims: '3840 × 2160 PX', aspect: 3840 / 2160 },
+    { id: 'ultrawide', category: 'DIGITAL', name: 'ULTRAWIDE 21:9', dims: '2560 × 1080 PX', aspect: 2560 / 1080 },
+    { id: 'iphone-15', category: 'DIGITAL', name: 'IPHONE 15 PRO', dims: '1179 × 2556 PX', aspect: 1179 / 2556 },
+    { id: 'iphone-plus', category: 'DIGITAL', name: 'IPHONE 15 PLUS', dims: '1290 × 2796 PX', aspect: 1290 / 2796 },
+    { id: 'android-fhd', category: 'DIGITAL', name: 'ANDROID FHD+', dims: '1080 × 2400 PX', aspect: 1080 / 2400 },
+    { id: 'ipad-pro', category: 'DIGITAL', name: 'IPAD PRO 12.9"', dims: '2048 × 2732 PX', aspect: 2048 / 2732 },
+    { id: 'macbook', category: 'DIGITAL', name: 'MACBOOK PRO 16"', dims: '3456 × 2234 PX', aspect: 3456 / 2234 },
     // Shapes
-    { id: 'perfect-circle', category: 'SHAPES',         name: 'PERFECT CIRCLE',      dims: 'CIRCULAR',       aspect: 1, isCircular: true },
-    { id: 'sq-1x1',       category: 'SHAPES',           name: 'SQUARE 1:1',          dims: '1:1',            aspect: 1 },
-    { id: 'wide-2x1',     category: 'SHAPES',           name: 'WIDE 2:1',            dims: '2:1',            aspect: 2 },
-    { id: 'classic-4x3',  category: 'SHAPES',           name: 'CLASSIC 4:3',         dims: '4:3',            aspect: 4 / 3 },
-    { id: 'cinema-235',   category: 'SHAPES',           name: 'CINEMASCOPE 2.35:1',  dims: '2.35:1',         aspect: 2.35 },
+    { id: 'perfect-circle', category: 'SHAPES', name: 'PERFECT CIRCLE', dims: 'CIRCULAR', aspect: 1, isCircular: true },
+    { id: 'sq-1x1', category: 'SHAPES', name: 'SQUARE 1:1', dims: '1:1', aspect: 1 },
+    { id: 'wide-2x1', category: 'SHAPES', name: 'WIDE 2:1', dims: '2:1', aspect: 2 },
+    { id: 'classic-4x3', category: 'SHAPES', name: 'CLASSIC 4:3', dims: '4:3', aspect: 4 / 3 },
+    { id: 'cinema-235', category: 'SHAPES', name: 'CINEMASCOPE 2.35:1', dims: '2.35:1', aspect: 2.35 },
+    // ISO C-series (Envelopes)
+    { id: 'c4-env', category: 'STATIONERY', name: 'C4 ENVELOPE', dims: '229 × 324 MM', aspect: 229 / 324 },
+    { id: 'c5-env', category: 'STATIONERY', name: 'C5 ENVELOPE', dims: '162 × 229 MM', aspect: 162 / 229 },
+    { id: 'dl-env', category: 'STATIONERY', name: 'DL ENVELOPE', dims: '220 × 110 MM', aspect: 220 / 110 },
+    // Photo
+    { id: 'polaroid', category: 'PHOTOGRAPHY', name: 'POLAROID CLASSIC', dims: '107 × 88 MM', aspect: 88 / 107 },
+    { id: '35mm-film', category: 'PHOTOGRAPHY', name: '35MM FILM', dims: '36 × 24 MM', aspect: 36 / 24 },
+    { id: 'photo-4x6', category: 'PHOTOGRAPHY', name: '4 × 6 IN (PHOTO)', dims: '4 × 6 IN', aspect: 4 / 6 },
+    { id: 'photo-5x7', category: 'PHOTOGRAPHY', name: '5 × 7 IN (PHOTO)', dims: '5 × 7 IN', aspect: 5 / 7 },
+    { id: 'photo-8x10', category: 'PHOTOGRAPHY', name: '8 × 10 IN (PHOTO)', dims: '8 × 10 IN', aspect: 8 / 10 },
+    // Cinema
+    { id: 'imax', category: 'CINEMA', name: 'IMAX DIGITAL', dims: '1.90:1', aspect: 1.90 },
+    { id: 'academy', category: 'CINEMA', name: 'ACADEMY RATIO', dims: '1.375:1', aspect: 1.375 },
+    // Digital
+    { id: 'steam-deck', category: 'DIGITAL', name: 'STEAM DECK', dims: '1280 × 800 PX', aspect: 1280 / 800 },
+    { id: 'super-wide', category: 'DIGITAL', name: 'SUPER ULTRAWIDE', dims: '32:9', aspect: 32 / 9 },
+    { id: 'vertorama', category: 'DIGITAL', name: 'VERTORAMA', dims: '9:32', aspect: 9 / 32 },
+    // Japanese JIS
+    { id: 'jis-b4', category: 'JAPANESE JIS', name: 'JIS B4', dims: '257 × 364 MM', aspect: 257 / 364 },
+    { id: 'jis-b5', category: 'JAPANESE JIS', name: 'JIS B5', dims: '182 × 257 MM', aspect: 182 / 257 },
+    // Stationery
+    { id: 'business-card', category: 'STATIONERY', name: 'BUSINESS CARD', dims: '3.5 × 2 IN', aspect: 3.5 / 2 },
+    { id: 'postcard', category: 'STATIONERY', name: 'POSTCARD', dims: '6 × 4 IN', aspect: 6 / 4 },
   ];
 
   const [selectedLayoutId, setSelectedLayoutId] = useState('a4-portrait');
@@ -519,15 +586,33 @@ const MapPoster = () => {
   useEffect(() => {
     if (!posterRef.current) return;
     const ro = new ResizeObserver(entries => {
-      const w = entries[0]?.contentRect.width;
-      if (w && w > 0) {
-        posterContainerPxRef.current = w;
-        setPosterWidth(w);
+      const entry = entries[0];
+      if (entry) {
+        const { width } = entry.contentRect;
+        if (width && width > 0) {
+          posterContainerPxRef.current = width;
+          setPosterWidth(width);
+          // Ensure all map engines fill their containers on any layout/sidebar change
+          mapRef.current?.resize();
+          bgMapRef.current?.resize();
+        }
       }
     });
     ro.observe(posterRef.current);
     return () => ro.disconnect();
   }, []);
+
+  // Ensure map fills space after sidebar animation completes
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      mapRef.current?.resize();
+      bgMapRef.current?.resize();
+    }, 350);
+    return () => clearTimeout(timer);
+  }, [activeTab, selectedLayoutId]);
+
+  const posterHeight = useMemo(() => posterWidth / currentLayoutAspect, [posterWidth, currentLayoutAspect]);
+  const minPosterDim = useMemo(() => Math.min(posterWidth, posterHeight), [posterWidth, posterHeight]);
 
   const distanceToZoom = (distMeters: number, latDeg: number): number => {
     const effective = Math.max(3300, posterContainerPxRef.current * 5.5);
@@ -654,7 +739,7 @@ const MapPoster = () => {
     }
   };
 
-  const handleDownload = async () => {
+  const handleDownload = useCallback(async () => {
     if (!posterRef.current || !mapRef.current) return;
 
     setExportLoading(true);
@@ -667,14 +752,12 @@ const MapPoster = () => {
     let proxyImg: HTMLImageElement | null = null;
 
     try {
-      await (document as any).fonts?.ready.catch(() => {});
+      await (document as any).fonts?.ready.catch(() => { });
       setExportProgress(20);
 
       // Force a render and capture the frame synchronously inside the render callback
-      // This is the only reliable way to read a WebGL canvas with preserveDrawingBuffer
       const mapDataUrl = await new Promise<string>((resolve) => {
         mapRef.current!.once('render', () => {
-          // Read immediately while GL buffer is still populated
           try {
             resolve(glCanvas.toDataURL('image/png'));
           } catch {
@@ -682,13 +765,10 @@ const MapPoster = () => {
           }
         });
         mapRef.current!.triggerRepaint();
-        // Safety timeout
         setTimeout(() => {
           try { resolve(glCanvas.toDataURL('image/png')); } catch { resolve(''); }
         }, 1000);
       });
-
-      console.log('[export] mapDataUrl length:', mapDataUrl.length);
 
       setExportProgress(50);
       setExportStatus('COMPOSITING...');
@@ -709,7 +789,6 @@ const MapPoster = () => {
       setExportProgress(75);
       setExportStatus('RENDERING...');
 
-      // Compute exact output dimensions based on resolution + poster aspect ratio
       const resolutionMap = { '1k': 1024, '2k': 2048, '4k': 4096, '6k': 6144, '8k': 8192 };
       const targetLongEdge = resolutionMap[exportResolution];
       const posterEl = posterRef.current;
@@ -717,7 +796,6 @@ const MapPoster = () => {
       const posterH = posterEl.offsetHeight;
       const aspect = posterW / posterH;
 
-      // Scale so the longest edge equals targetLongEdge
       let outW: number, outH: number;
       if (posterW >= posterH) {
         outW = targetLongEdge;
@@ -753,7 +831,6 @@ const MapPoster = () => {
       try {
         dataUrl = await exportFn(posterRef.current, baseOpts);
       } catch {
-        // fallback: try without canvasWidth/canvasHeight
         dataUrl = await exportFn(posterRef.current, {
           pixelRatio,
           cacheBust: true,
@@ -762,7 +839,6 @@ const MapPoster = () => {
         });
       }
 
-      // Embed DPI metadata into PNG (pHYs chunk: pixels per metre)
       if (exportFormat === 'png' && exportDpi > 0 && dataUrl.startsWith('data:image/png')) {
         try {
           dataUrl = embedPngDpi(dataUrl, exportDpi);
@@ -780,13 +856,13 @@ const MapPoster = () => {
       console.error('Export error:', err);
       alert('Failed to generate image. Please try again.');
     } finally {
-      if (proxyImg && mapLayer) { try { mapLayer.removeChild(proxyImg); } catch {} }
+      if (proxyImg && mapLayer) { try { mapLayer.removeChild(proxyImg); } catch { } }
       if (mapCanvasEl) mapCanvasEl.style.visibility = '';
       setExportLoading(false);
       setExportProgress(0);
       setExportStatus('');
     }
-  };
+  }, [posterRef, mapRef, exportFormat, exportResolution, exportDpi, locName, mapCenter]);
 
   const handleRecenter = () => {
     if (mapRef.current) {
@@ -815,6 +891,7 @@ const MapPoster = () => {
     { id: 'layers', label: 'LAYERS', icon: Layers },
     { id: 'markers', label: 'MARKERS', icon: MarkerIcon },
     { id: 'settings', label: 'SETTINGS', icon: Settings },
+    { id: 'export', label: 'EXPORT', icon: Download },
   ];
 
   return (
@@ -842,15 +919,27 @@ const MapPoster = () => {
             </span>
           </div>
         </div>
-        {/* Mobile download button in header */}
-        <button
-          onClick={handleDownload}
-          disabled={exportLoading}
-          className="md:hidden flex items-center gap-1.5 px-3 py-1.5 bg-white rounded-lg text-black font-black tracking-wider text-[10px] shadow-lg transition-all active:scale-95 disabled:opacity-50 shrink-0"
-        >
-          {exportLoading ? <RefreshCw className="w-3 h-3 animate-spin" /> : <Download className="w-3 h-3" />}
-          {exportLoading ? '...' : 'EXPORT'}
-        </button>
+        {/* Header Actions: Socials */}
+        <div className="flex items-center gap-1 md:gap-2 shrink-0">
+          <a
+            href="https://github.com/kanishkkumarsingh2004/CARTOGRAPHIC-STUDIO"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="p-2 text-muted-foreground hover:text-foreground hover:bg-white/5 rounded-lg transition-all"
+            title="GitHub Repository"
+          >
+            <Github className="w-4 h-4 md:w-5 md:h-5" />
+          </a>
+          <a
+            href="https://buymeacoffee.com/kanishkkumarsingh"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="p-2 text-[#FFDD00] hover:bg-[#FFDD00]/10 rounded-lg transition-all"
+            title="Buy Me a Coffee"
+          >
+            <Coffee className="w-4 h-4 md:w-5 md:h-5 fill-[#FFDD00]/10" />
+          </a>
+        </div>
       </header>
 
       <div className="flex flex-1 relative min-h-0 overflow-hidden bg-[#050810]">
@@ -900,14 +989,10 @@ const MapPoster = () => {
           <div className="p-6 pb-4 border-b border-white/5 space-y-4">
             <div className="flex items-center gap-2">
               <form
+                id="location-search-form"
                 onSubmit={handleSearch}
-                className="flex items-center bg-white/5 border border-white/10 rounded-lg pl-3 pr-2 py-2 w-full shadow-inner transition-all focus-within:border-primary/50 focus-within:bg-white/10 grow"
+                className="flex items-center bg-white/5 border border-white/10 rounded-lg px-3 py-2 w-full shadow-inner transition-all focus-within:border-primary/50 focus-within:bg-white/10 grow"
               >
-                {searchLoading ? (
-                  <RefreshCw className="w-4 h-4 text-primary animate-spin mr-3" />
-                ) : (
-                  <Search className="w-4 h-4 text-muted-foreground mr-3" />
-                )}
                 <input
                   type="text"
                   value={searchQuery}
@@ -926,14 +1011,23 @@ const MapPoster = () => {
                 )}
               </form>
               <button
+                type="submit"
+                form="location-search-form"
+                className={`shrink-0 p-2.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg shadow-lg text-white transition-colors ${searchLoading ? 'opacity-50 pointer-events-none' : ''}`}
+                title="Search"
+              >
+                {searchLoading ? (
+                  <RefreshCw className="w-4 h-4 text-primary animate-spin" />
+                ) : (
+                  <Search className="w-4 h-4 text-muted-foreground" />
+                )}
+              </button>
+              <button
                 onClick={handleGeolocation}
                 className={`shrink-0 p-2.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg shadow-lg text-white transition-colors ${searchLoading ? 'opacity-50 pointer-events-none' : ''}`}
                 title="My Location"
               >
                 <Crosshair className="w-4 h-4" />
-              </button>
-              <button className="shrink-0 p-2.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg shadow-lg text-white transition-colors" title="Add Marker">
-                <MapPin className="w-4 h-4" />
               </button>
             </div>
           </div>
@@ -965,8 +1059,8 @@ const MapPoster = () => {
                           key={theme.id}
                           onClick={() => handleThemeSelect(theme.id)}
                           className={`w-full group text-left rounded-xl border transition-all overflow-hidden ${selectedThemeId === theme.id
-                              ? 'border-primary/50 bg-primary/5 shadow-lg shadow-primary/5'
-                              : 'border-white/5 bg-white/[0.02] hover:bg-white/[0.05] hover:border-white/10'
+                            ? 'border-primary/50 bg-primary/5 shadow-lg shadow-primary/5'
+                            : 'border-white/5 bg-white/[0.02] hover:bg-white/[0.05] hover:border-white/10'
                             }`}
                         >
                           <div className="h-24 w-full flex relative overflow-hidden">
@@ -1188,8 +1282,8 @@ const MapPoster = () => {
                               setCustomAspectRatio(null);
                             }}
                             className={`flex flex-col text-left rounded-xl border p-3 transition-all ${selectedLayoutId === layout.id
-                                ? 'border-primary/50 bg-primary/5 shadow-lg'
-                                : 'border-white/5 bg-white/[0.02] hover:bg-white/[0.05] hover:border-white/10'
+                              ? 'border-primary/50 bg-primary/5 shadow-lg'
+                              : 'border-white/5 bg-white/[0.02] hover:bg-white/[0.05] hover:border-white/10'
                               }`}
                           >
                             <span className="text-[9px] font-bold text-white mb-0.5 uppercase tracking-tighter truncate w-full">
@@ -1246,7 +1340,7 @@ const MapPoster = () => {
                         }`} />
                     </button>
                   </div>
-                  
+
                   {/* Corner Rounding Control */}
                   <div className="space-y-4">
                     <div className="flex items-center justify-between">
@@ -1272,17 +1366,16 @@ const MapPoster = () => {
                         value={(selectedLayout as any).isCircular ? 500 : cornerRadius}
                         disabled={(selectedLayout as any).isCircular}
                         onChange={(e) => setCornerRadius(parseInt(e.target.value))}
-                        className={`flex-1 h-1.5 bg-white/10 rounded-full appearance-none cursor-pointer accent-primary ${
-                          (selectedLayout as any).isCircular ? 'opacity-30 cursor-not-allowed' : ''
-                        }`}
+                        className={`flex-1 h-1.5 bg-white/10 rounded-full appearance-none cursor-pointer accent-primary ${(selectedLayout as any).isCircular ? 'opacity-30 cursor-not-allowed' : ''
+                          }`}
                         style={{
-                          background: `linear-gradient(to right, var(--primary) 0%, var(--primary) ${(( (selectedLayout as any).isCircular ? 500 : cornerRadius) / 500) * 100}%, rgba(255,255,255,0.1) ${(( (selectedLayout as any).isCircular ? 500 : cornerRadius) / 500) * 100}%, rgba(255,255,255,0.1) 100%)`
+                          background: `linear-gradient(to right, var(--primary) 0%, var(--primary) ${(((selectedLayout as any).isCircular ? 500 : cornerRadius) / 500) * 100}%, rgba(255,255,255,0.1) ${(((selectedLayout as any).isCircular ? 500 : cornerRadius) / 500) * 100}%, rgba(255,255,255,0.1) 100%)`
                         }}
                       />
                     </div>
                     <p className="text-[10px] text-muted-foreground/60 leading-relaxed uppercase">
-                      {(selectedLayout as any).isCircular 
-                        ? 'Rounding is fixed for circular layouts.' 
+                      {(selectedLayout as any).isCircular
+                        ? 'Rounding is fixed for circular layouts.'
                         : 'Adjust the sharpness or roundness of the poster edges.'}
                     </p>
                   </div>
@@ -1336,7 +1429,7 @@ const MapPoster = () => {
                       <label className="text-xs font-medium text-muted-foreground">City font size</label>
                       <div className="flex items-center gap-2">
                         <span className="text-[10px] font-mono text-muted-foreground bg-white/5 px-1.5 py-0.5 rounded border border-white/5">
-                          {fontSizeOverride ?? Math.round(Math.max(12, posterWidth * 0.09))}px
+                          {fontSizeOverride ?? Math.round(Math.max(12, minPosterDim * 0.12))}px
                         </span>
                         {fontSizeOverride !== null && (
                           <button
@@ -1354,18 +1447,18 @@ const MapPoster = () => {
                         min="8"
                         max="200"
                         step="1"
-                        value={fontSizeOverride ?? Math.round(Math.max(12, posterWidth * 0.09))}
+                        value={fontSizeOverride ?? Math.round(Math.max(12, minPosterDim * 0.12))}
                         onChange={(e) => setFontSizeOverride(parseInt(e.target.value))}
                         className="flex-1 h-1.5 rounded-full appearance-none cursor-pointer accent-primary"
                         style={{
-                          background: `linear-gradient(to right, var(--primary) 0%, var(--primary) ${(((fontSizeOverride ?? Math.round(Math.max(12, posterWidth * 0.09))) - 8) / 192) * 100}%, rgba(255,255,255,0.1) ${(((fontSizeOverride ?? Math.round(Math.max(12, posterWidth * 0.09))) - 8) / 192) * 100}%, rgba(255,255,255,0.1) 100%)`
+                          background: `linear-gradient(to right, var(--primary) 0%, var(--primary) ${(((fontSizeOverride ?? Math.round(Math.max(12, minPosterDim * 0.12))) - 8) / 192) * 100}%, rgba(255,255,255,0.1) ${(((fontSizeOverride ?? Math.round(Math.max(12, minPosterDim * 0.12))) - 8) / 192) * 100}%, rgba(255,255,255,0.1) 100%)`
                         }}
                       />
                       <input
                         type="number"
                         min="8"
                         max="500"
-                        value={fontSizeOverride ?? Math.round(Math.max(12, posterWidth * 0.09))}
+                        value={fontSizeOverride ?? Math.round(Math.max(12, minPosterDim * 0.12))}
                         onChange={(e) => {
                           const v = parseInt(e.target.value);
                           if (!isNaN(v) && v >= 8) setFontSizeOverride(v);
@@ -1381,7 +1474,7 @@ const MapPoster = () => {
                       <label className="text-xs font-medium text-muted-foreground">Country font size</label>
                       <div className="flex items-center gap-2">
                         <span className="text-[10px] font-mono text-muted-foreground bg-white/5 px-1.5 py-0.5 rounded border border-white/5">
-                          {countrySizeOverride ?? Math.round(Math.max(8, posterWidth * 0.038))}px
+                          {countrySizeOverride ?? Math.round(Math.max(8, minPosterDim * 0.05))}px
                         </span>
                         {countrySizeOverride !== null && (
                           <button onClick={() => setCountrySizeOverride(null)} className="text-[9px] font-bold tracking-widest text-muted-foreground hover:text-white uppercase border border-white/5 bg-white/5 px-2 py-0.5 rounded transition-all">Auto</button>
@@ -1391,14 +1484,14 @@ const MapPoster = () => {
                     <div className="flex items-center gap-3">
                       <input
                         type="range" min="6" max="150" step="1"
-                        value={countrySizeOverride ?? Math.round(Math.max(8, posterWidth * 0.038))}
+                        value={countrySizeOverride ?? Math.round(Math.max(8, minPosterDim * 0.05))}
                         onChange={(e) => setCountrySizeOverride(parseInt(e.target.value))}
                         className="flex-1 h-1.5 rounded-full appearance-none cursor-pointer accent-primary"
-                        style={{ background: `linear-gradient(to right, var(--primary) 0%, var(--primary) ${(((countrySizeOverride ?? Math.round(Math.max(8, posterWidth * 0.038))) - 6) / 144) * 100}%, rgba(255,255,255,0.1) ${(((countrySizeOverride ?? Math.round(Math.max(8, posterWidth * 0.038))) - 6) / 144) * 100}%, rgba(255,255,255,0.1) 100%)` }}
+                        style={{ background: `linear-gradient(to right, var(--primary) 0%, var(--primary) ${(((countrySizeOverride ?? Math.round(Math.max(8, minPosterDim * 0.05))) - 6) / 144) * 100}%, rgba(255,255,255,0.1) ${(((countrySizeOverride ?? Math.round(Math.max(8, minPosterDim * 0.05))) - 6) / 144) * 100}%, rgba(255,255,255,0.1) 100%)` }}
                       />
                       <input
                         type="number" min="6" max="500"
-                        value={countrySizeOverride ?? Math.round(Math.max(8, posterWidth * 0.038))}
+                        value={countrySizeOverride ?? Math.round(Math.max(8, minPosterDim * 0.05))}
                         onChange={(e) => { const v = parseInt(e.target.value); if (!isNaN(v) && v >= 6) setCountrySizeOverride(v); }}
                         className="w-16 bg-white/5 border border-white/10 rounded-lg px-2 py-1.5 text-sm text-white text-center focus:border-primary/50 focus:outline-none"
                       />
@@ -1411,7 +1504,7 @@ const MapPoster = () => {
                       <label className="text-xs font-medium text-muted-foreground">Coordinates font size</label>
                       <div className="flex items-center gap-2">
                         <span className="text-[10px] font-mono text-muted-foreground bg-white/5 px-1.5 py-0.5 rounded border border-white/5">
-                          {coordSizeOverride ?? Math.round(Math.max(6, posterWidth * 0.026))}px
+                          {coordSizeOverride ?? Math.round(Math.max(6, minPosterDim * 0.035))}px
                         </span>
                         {coordSizeOverride !== null && (
                           <button onClick={() => setCoordSizeOverride(null)} className="text-[9px] font-bold tracking-widest text-muted-foreground hover:text-white uppercase border border-white/5 bg-white/5 px-2 py-0.5 rounded transition-all">Auto</button>
@@ -1421,15 +1514,45 @@ const MapPoster = () => {
                     <div className="flex items-center gap-3">
                       <input
                         type="range" min="4" max="100" step="1"
-                        value={coordSizeOverride ?? Math.round(Math.max(6, posterWidth * 0.026))}
+                        value={coordSizeOverride ?? Math.round(Math.max(6, minPosterDim * 0.035))}
                         onChange={(e) => setCoordSizeOverride(parseInt(e.target.value))}
                         className="flex-1 h-1.5 rounded-full appearance-none cursor-pointer accent-primary"
-                        style={{ background: `linear-gradient(to right, var(--primary) 0%, var(--primary) ${(((coordSizeOverride ?? Math.round(Math.max(6, posterWidth * 0.026))) - 4) / 96) * 100}%, rgba(255,255,255,0.1) ${(((coordSizeOverride ?? Math.round(Math.max(6, posterWidth * 0.026))) - 4) / 96) * 100}%, rgba(255,255,255,0.1) 100%)` }}
+                        style={{ background: `linear-gradient(to right, var(--primary) 0%, var(--primary) ${(((coordSizeOverride ?? Math.round(Math.max(6, minPosterDim * 0.035))) - 4) / 96) * 100}%, rgba(255,255,255,0.1) ${(((coordSizeOverride ?? Math.round(Math.max(6, minPosterDim * 0.035))) - 4) / 96) * 100}%, rgba(255,255,255,0.1) 100%)` }}
                       />
                       <input
                         type="number" min="4" max="500"
-                        value={coordSizeOverride ?? Math.round(Math.max(6, posterWidth * 0.026))}
+                        value={coordSizeOverride ?? Math.round(Math.max(6, minPosterDim * 0.035))}
                         onChange={(e) => { const v = parseInt(e.target.value); if (!isNaN(v) && v >= 4) setCoordSizeOverride(v); }}
+                        className="w-16 bg-white/5 border border-white/10 rounded-lg px-2 py-1.5 text-sm text-white text-center focus:border-primary/50 focus:outline-none"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Text Spacing */}
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <label className="text-xs font-medium text-muted-foreground">Text Spacing</label>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] font-mono text-muted-foreground bg-white/5 px-1.5 py-0.5 rounded border border-white/5">
+                          {textSpacingOverride ?? Math.round(posterWidth * 0.025)}px
+                        </span>
+                        {textSpacingOverride !== null && (
+                          <button onClick={() => setTextSpacingOverride(null)} className="text-[9px] font-bold tracking-widest text-muted-foreground hover:text-white uppercase border border-white/5 bg-white/5 px-2 py-0.5 rounded transition-all">Auto</button>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <input
+                        type="range" min="0" max="250" step="1"
+                        value={textSpacingOverride ?? Math.round(posterWidth * 0.025)}
+                        onChange={(e) => setTextSpacingOverride(parseInt(e.target.value))}
+                        className="flex-1 h-1.5 rounded-full appearance-none cursor-pointer accent-primary"
+                        style={{ background: `linear-gradient(to right, var(--primary) 0%, var(--primary) ${((textSpacingOverride ?? Math.round(posterWidth * 0.025)) / 250) * 100}%, rgba(255,255,255,0.1) ${((textSpacingOverride ?? Math.round(posterWidth * 0.025)) / 250) * 100}%, rgba(255,255,255,0.1) 100%)` }}
+                      />
+                      <input
+                        type="number" min="0" max="800"
+                        value={textSpacingOverride ?? Math.round(posterWidth * 0.025)}
+                        onChange={(e) => { const v = parseInt(e.target.value); if (!isNaN(v) && v >= 0) setTextSpacingOverride(v); }}
                         className="w-16 bg-white/5 border border-white/10 rounded-lg px-2 py-1.5 text-sm text-white text-center focus:border-primary/50 focus:outline-none"
                       />
                     </div>
@@ -1616,6 +1739,45 @@ const MapPoster = () => {
                       </button>
                     </div>
 
+                    <div className="space-y-4 pt-4 border-t border-white/5">
+                      <div className="flex items-center justify-between">
+                        <h4 className="text-[10px] font-bold text-white uppercase tracking-wider">Map Zoom</h4>
+                        <span className="text-[10px] font-mono text-primary bg-primary/10 px-1.5 py-0.5 rounded">
+                          {zoom.toFixed(1)}z
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-4">
+                        <button
+                          onClick={() => { const z = Math.max(1, zoom - 1); setZoom(z); mapRef.current?.zoomTo(z); }}
+                          className="p-1.5 bg-white/5 hover:bg-white/10 rounded border border-white/10 transition-colors"
+                        >
+                          <ZoomOut className="w-3.5 h-3.5" />
+                        </button>
+                        <input
+                          type="range"
+                          min="1"
+                          max="20"
+                          step="0.1"
+                          value={zoom}
+                          onChange={(e) => {
+                            const val = parseFloat(e.target.value);
+                            setZoom(val);
+                            mapRef.current?.setZoom(val);
+                          }}
+                          className="flex-1 h-1.5 bg-white/10 rounded-full appearance-none cursor-pointer accent-primary"
+                          style={{
+                            background: `linear-gradient(to right, var(--primary) 0%, var(--primary) ${((zoom - 1) / 19) * 100}%, rgba(255,255,255,0.1) ${((zoom - 1) / 19) * 100}%, rgba(255,255,255,0.1) 100%)`
+                          }}
+                        />
+                        <button
+                          onClick={() => { const z = Math.min(20, zoom + 1); setZoom(z); mapRef.current?.zoomTo(z); }}
+                          className="p-1.5 bg-white/5 hover:bg-white/10 rounded border border-white/10 transition-colors"
+                        >
+                          <ZoomIn className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+
                     {isRotationEnabled && (
                       <div className="space-y-4 pt-4 border-t border-white/5 animate-in fade-in slide-in-from-top-2 duration-300">
                         <div className="flex items-center justify-between">
@@ -1673,6 +1835,17 @@ const MapPoster = () => {
                           }`} />
                       </button>
                     </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium text-white">Show Info HUD</span>
+                      <button
+                        onClick={() => setShowHUD(!showHUD)}
+                        className={`relative w-12 h-6 rounded-full transition-colors duration-300 ${showHUD ? 'bg-primary' : 'bg-white/10'
+                          }`}
+                      >
+                        <div className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow-md transition-transform duration-300 ${showHUD ? 'translate-x-6' : 'translate-x-0.5'
+                          }`} />
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -1714,6 +1887,113 @@ const MapPoster = () => {
                 </div>
               </div>
             )}
+
+            {activeTab === 'export' && (
+              <div className="flex flex-col h-full bg-[#0c111c]">
+                <div className="p-6 pb-4 border-b border-white/5">
+                  <h2 className="text-sm font-bold tracking-[0.1em] text-white uppercase mb-1">EXPORT SETTINGS</h2>
+                  <p className="text-[11px] text-muted-foreground/80 leading-relaxed uppercase">
+                    Configure your high-resolution output preferences.
+                  </p>
+                </div>
+
+                <div className="flex-1 overflow-y-auto px-6 py-6 space-y-8 custom-scrollbar">
+                  <div className="space-y-4">
+                    <h3 className="text-[10px] font-black tracking-[0.2em] text-primary uppercase">FILE FORMAT</h3>
+                    <div className="flex gap-2">
+                      {(['png', 'jpg'] as const).map(fmt => (
+                        <button
+                          key={fmt}
+                          onClick={() => setExportFormat(fmt)}
+                          className={`flex-1 py-3 rounded-xl border font-bold text-xs transition-all uppercase ${exportFormat === fmt
+                              ? 'bg-primary text-black border-transparent shadow-lg shadow-primary/10'
+                              : 'bg-white/5 border-white/10 text-white hover:bg-white/10'
+                            }`}
+                        >
+                          {fmt}
+                        </button>
+                      ))}
+                    </div>
+                    <p className="text-[10px] text-muted-foreground leading-relaxed">
+                      {exportFormat === 'png'
+                        ? 'Lossless compression, supports DPI metadata. Best for high-quality printing.'
+                        : 'Efficient compression, standard quality. Great for sharing on social media.'}
+                    </p>
+                  </div>
+
+                  <div className="space-y-4 pt-6 border-t border-white/5">
+                    <h3 className="text-[10px] font-black tracking-[0.2em] text-primary uppercase">RESOLUTION</h3>
+                    <div className="grid grid-cols-5 gap-2">
+                      {(['1k', '2k', '4k', '6k', '8k'] as const).map(res => (
+                        <button
+                          key={res}
+                          onClick={() => setExportResolution(res)}
+                          className={`py-2.5 rounded-lg border font-bold text-[10px] transition-all uppercase ${exportResolution === res
+                              ? 'bg-white text-black border-transparent shadow-lg'
+                              : 'bg-white/5 border-white/10 text-white hover:bg-white/10'
+                            }`}
+                        >
+                          {res}
+                        </button>
+                      ))}
+                    </div>
+                    <div className="flex justify-between items-center bg-white/5 border border-white/10 rounded-xl p-3">
+                      <span className="text-[10px] font-bold text-muted-foreground uppercase">Estimated Size</span>
+                      <span className="text-[11px] font-mono text-white">
+                        {exportResolution === '1k' ? '~1024 px' :
+                          exportResolution === '2k' ? '~2048 px' :
+                            exportResolution === '4k' ? '~4096 px' :
+                              exportResolution === '6k' ? '~6144 px' : '~8192 px'} (Long Edge)
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="space-y-4 pt-6 border-t border-white/5">
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-[10px] font-black tracking-[0.2em] text-primary uppercase">PRINT DENSITY (DPI)</h3>
+                      <span className="text-[11px] font-mono text-primary bg-primary/10 px-1.5 py-0.5 rounded border border-primary/20">
+                        {exportDpi}
+                      </span>
+                    </div>
+                    <input
+                      type="range"
+                      min="72"
+                      max="600"
+                      step="1"
+                      value={exportDpi}
+                      onChange={(e) => setExportDpi(parseInt(e.target.value))}
+                      className="w-full h-1.5 bg-white/10 rounded-full appearance-none cursor-pointer accent-primary"
+                      style={{
+                        background: `linear-gradient(to right, var(--primary) 0%, var(--primary) ${((exportDpi - 72) / (600 - 72)) * 100}%, rgba(255,255,255,0.1) ${((exportDpi - 72) / (600 - 72)) * 100}%, rgba(255,255,255,0.1) 100%)`
+                      }}
+                    />
+                    <div className="flex justify-between">
+                      <span className="text-[9px] text-muted-foreground font-mono">72 (Web)</span>
+                      <span className="text-[9px] text-muted-foreground font-mono">300 (Print)</span>
+                      <span className="text-[9px] text-muted-foreground font-mono">600 (HD)</span>
+                    </div>
+                    <p className="text-[10px] text-muted-foreground/60 leading-relaxed uppercase">
+                      Higher DPI improves print sharpness but increases file size. 300 is recommended for professional printing.
+                    </p>
+                  </div>
+
+                  <div className="pt-8">
+                    <button
+                      onClick={handleDownload}
+                      disabled={exportLoading}
+                      className="w-full py-4 bg-primary text-black font-black tracking-[0.2em] text-xs rounded-xl shadow-2xl shadow-primary/20 hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 disabled:pointer-events-none uppercase flex items-center justify-center gap-3"
+                    >
+                      {exportLoading ? (
+                        <RefreshCw className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <Download className="w-4 h-4" />
+                      )}
+                      {exportLoading ? 'GENERATING...' : 'GENERATE POSTER'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </aside>
 
@@ -1749,9 +2029,9 @@ const MapPoster = () => {
                 borderColor: currentColors['Road Outline'],
                 aspectRatio: currentLayoutAspect,
                 borderRadius: (selectedLayout as any).isCircular ? '50%' : `${cornerRadius}px`,
-                width: `min(92vw, calc(58vh * ${currentLayoutAspect}))`,
+                width: `min(94vw, calc(78vh * ${currentLayoutAspect}))`,
                 maxWidth: '100%',
-                maxHeight: '58vh',
+                maxHeight: '78vh',
                 height: 'auto',
               }}
             >
@@ -1774,9 +2054,9 @@ const MapPoster = () => {
                   touchZoomRotate={!isMapLocked}
                 >
                   {markers.map((marker) => (
-                    <MapMarker 
-                      key={marker.id} 
-                      longitude={marker.coords[0]} 
+                    <MapMarker
+                      key={marker.id}
+                      longitude={marker.coords[0]}
                       latitude={marker.coords[1]}
                     >
                       <MarkerContent>
@@ -1825,9 +2105,9 @@ const MapPoster = () => {
                     style={{
                       color: currentColors['Text'],
                       fontFamily: selectedFont,
-                      fontSize: `${fontSizeOverride ?? Math.max(12, posterWidth * 0.09)}px`,
+                      fontSize: `${fontSizeOverride ?? Math.max(12, minPosterDim * 0.12)}px`,
                       letterSpacing: '0.18em',
-                      marginBottom: `${posterWidth * 0.025}px`,
+                      marginBottom: `${textSpacingOverride ?? (posterWidth * 0.025)}px`,
                       wordBreak: 'break-word',
                       overflowWrap: 'break-word',
                     }}
@@ -1840,9 +2120,9 @@ const MapPoster = () => {
                     className="font-black text-center opacity-80"
                     style={{
                       color: currentColors['Text'],
-                      fontSize: `${countrySizeOverride ?? Math.max(8, posterWidth * 0.038)}px`,
+                      fontSize: `${countrySizeOverride ?? Math.max(8, minPosterDim * 0.05)}px`,
                       letterSpacing: '0.5em',
-                      marginBottom: `${posterWidth * 0.018}px`,
+                      marginBottom: `${(textSpacingOverride ? (textSpacingOverride * 0.72) : (posterWidth * 0.018))}px`,
                     }}
                     suppressHydrationWarning
                   >
@@ -1853,7 +2133,7 @@ const MapPoster = () => {
                     className="font-mono text-center"
                     style={{
                       color: `${currentColors['Text']}b3`,
-                      fontSize: `${coordSizeOverride ?? Math.max(6, posterWidth * 0.026)}px`,
+                      fontSize: `${coordSizeOverride ?? Math.max(6, minPosterDim * 0.035)}px`,
                       letterSpacing: '0.15em',
                     }}
                     suppressHydrationWarning
@@ -1865,79 +2145,9 @@ const MapPoster = () => {
 
             </div>
 
-            {!isMapLocked && (
-              <div className="flex flex-col gap-2 w-full sm:w-auto animate-in fade-in slide-in-from-bottom-4 duration-300">
-                {/* Row 1: Lock + Rotate */}
-                <div className="flex items-center gap-2 bg-background/80 backdrop-blur-xl border border-white/10 rounded-xl px-3 py-2.5 shadow-2xl">
-                  <button
-                    onClick={() => setIsMapLocked(true)}
-                    className="flex items-center gap-2 px-3 py-2 bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 rounded-lg text-xs font-bold transition-all uppercase flex-1 justify-center"
-                  >
-                    <LockIcon className="w-3.5 h-3.5" />
-                    Lock Map
-                  </button>
-                  <button
-                    onClick={() => setIsRotationEnabled(!isRotationEnabled)}
-                    className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-bold transition-all uppercase flex-1 justify-center ${isRotationEnabled
-                        ? 'bg-primary text-black'
-                        : 'bg-white/5 hover:bg-white/10 text-white border border-white/10'
-                      }`}
-                  >
-                    <RefreshCw className={`w-3.5 h-3.5 ${isRotationEnabled ? 'animate-spin-slow' : ''}`} />
-                    Rotate
-                  </button>
-                </div>
-                {/* Row 2: Zoom slider */}
-                <div className="flex items-center gap-3 bg-background/80 backdrop-blur-xl border border-white/10 rounded-xl px-4 py-2.5 shadow-2xl">
-                  <button
-                    onClick={() => { const z = Math.max(1, zoom - 0.5); setZoom(z); mapRef.current?.zoomTo(z); }}
-                    className="p-1.5 hover:bg-white/10 rounded-md text-white transition-colors shrink-0"
-                  >
-                    <ZoomOut className="w-4 h-4" />
-                  </button>
-                  <input
-                    type="range"
-                    min="1"
-                    max="20"
-                    step="0.1"
-                    value={zoom}
-                    onChange={(e) => {
-                      const newZoom = parseFloat(e.target.value);
-                      setZoom(newZoom);
-                      mapRef.current?.setZoom(newZoom);
-                    }}
-                    className="flex-1 h-1.5 bg-white/10 rounded-full appearance-none cursor-pointer accent-primary"
-                    style={{
-                      background: `linear-gradient(to right, var(--primary) 0%, var(--primary) ${((zoom - 1) / 19) * 100}%, rgba(255,255,255,0.1) ${((zoom - 1) / 19) * 100}%, rgba(255,255,255,0.1) 100%)`
-                    }}
-                  />
-                  <button
-                    onClick={() => { const z = Math.min(20, zoom + 0.5); setZoom(z); mapRef.current?.zoomTo(z); }}
-                    className="p-1.5 hover:bg-white/10 rounded-md text-white transition-colors shrink-0"
-                  >
-                    <ZoomIn className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
-            )}
 
-            {/* Bottom Actions under the Poster */}
-            <div className="flex flex-row flex-wrap items-center gap-2 sm:gap-3 shrink-0 transition-opacity w-full justify-center">
-              <button onClick={handleRecenter} className="flex items-center justify-center gap-2 px-4 py-2 md:px-6 md:py-3 bg-background/90 backdrop-blur-md hover:bg-secondary hover:text-primary rounded-full border border-border font-medium text-xs text-foreground shadow-xl transition-colors">
-                <Crosshair className="w-3.5 h-3.5 md:w-4 md:h-4" />
-                <span>Recenter</span>
-              </button>
-              <button
-                onClick={() => setIsMapLocked(!isMapLocked)}
-                className={`flex items-center gap-2 px-4 py-2 md:px-6 md:py-3 rounded-full border font-medium text-xs shadow-xl transition-all justify-center ${isMapLocked
-                    ? 'bg-primary text-black border-transparent hover:opacity-90'
-                    : 'bg-background/90 text-foreground border-border hover:bg-secondary hover:text-primary'
-                  }`}
-              >
-                {isMapLocked ? <Brush className="w-3.5 h-3.5 md:w-4 md:h-4" /> : <LockIcon className="w-3.5 h-3.5 md:w-4 md:h-4" />}
-                {isMapLocked ? 'Edit Map' : 'Lock Map'}
-              </button>
-            </div>
+
+
 
             {/* Credits — mobile only, shown below buttons */}
             <p className="md:hidden text-[9px] font-mono tracking-[0.2em] text-white/40 uppercase text-center">
@@ -1945,21 +2155,40 @@ const MapPoster = () => {
             </p>
           </div>
 
-          {/* Floating Bottom Right — desktop only */}
-          <div className="hidden md:block absolute bottom-8 right-8 z-30">
-            <button
-              onClick={handleDownload}
-              disabled={exportLoading}
-              className={`flex items-center gap-3 px-8 py-4 bg-white hover:bg-gray-100 rounded-lg text-black font-black tracking-[0.15em] text-xs shadow-2xl transition-all hover:scale-105 active:scale-95 disabled:opacity-50 disabled:pointer-events-none group`}
-            >
-              {exportLoading ? (
-                <RefreshCw className="w-4 h-4 animate-spin text-primary" />
-              ) : (
-                <Download className="w-4 h-4 group-hover:translate-y-0.5 transition-transform" />
-              )}
-              {exportLoading ? 'GENERATING...' : 'DOWNLOAD POSTER'}
-            </button>
-          </div>
+          {/* Current Settings — large devices only */}
+          {showHUD && (
+            <div className="hidden lg:block absolute bottom-20 right-12 z-30 pointer-events-none">
+              <div className="bg-[#0a0f18]/80 backdrop-blur-2xl border border-white/10 rounded-2xl p-6 shadow-2xl min-w-[340px] animate-in fade-in slide-in-from-right-4 duration-500">
+                <h3 className="text-[10px] font-black tracking-[0.2em] text-primary uppercase mb-4">CURRENT SETTINGS</h3>
+                <div className="grid grid-cols-2 gap-x-8 gap-y-4">
+                  <div className="space-y-1">
+                    <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest">LOCATION</p>
+                    <p className="text-[13px] font-bold text-white truncate max-w-[140px] uppercase">{locName || 'Unknown'}</p>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest">THEME</p>
+                    <p className="text-[13px] font-bold text-white uppercase">{selectedTheme.name}</p>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest">LAYOUT</p>
+                    <p className="text-[13px] font-bold text-white uppercase">{selectedLayout.name}</p>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest">POSTER SIZE</p>
+                    <p className="text-[13px] font-bold text-white uppercase">{selectedLayout.dims}</p>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest">MARKERS</p>
+                    <p className="text-[13px] font-bold text-white uppercase">{markers.length} markers</p>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest">COORDINATES</p>
+                    <p className="text-[13px] font-bold text-white font-mono">{mapCenter[1].toFixed(4)}, {mapCenter[0].toFixed(4)}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Credits Footer — desktop only */}
           <footer className="hidden md:block mt-auto py-6 w-full text-center z-10 text-white opacity-100 transition-opacity duration-500">
@@ -1990,10 +2219,10 @@ const MapPoster = () => {
           </div>
         </main>
       </div>
-      <ExportProgress 
-        isVisible={exportLoading} 
-        progress={exportProgress} 
-        status={exportStatus} 
+      <ExportProgress
+        isVisible={exportLoading}
+        progress={exportProgress}
+        status={exportStatus}
       />
 
       {/* Preview Dialog */}
@@ -2025,60 +2254,11 @@ const MapPoster = () => {
             </div>
 
             {/* Actions */}
-            <div className="border-t border-white/5" style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}>
-              {/* Export options */}
-              <div className="flex flex-wrap items-center gap-3 px-4 sm:px-6 py-3">
-                {/* Format toggle */}
-                <div className="flex items-center bg-white/5 rounded-lg p-0.5 border border-white/10">
-                  {(['png', 'jpg'] as const).map(fmt => (
-                    <button
-                      key={fmt}
-                      onClick={() => setExportFormat(fmt)}
-                      className={`px-3 py-1.5 text-[10px] font-black tracking-wider rounded-md transition-all uppercase ${
-                        exportFormat === fmt
-                          ? 'bg-white text-black'
-                          : 'text-muted-foreground hover:text-white'
-                      }`}
-                    >
-                      {fmt}
-                    </button>
-                  ))}
-                </div>
-                {/* Resolution toggle */}
-                <div className="flex items-center bg-white/5 rounded-lg p-0.5 border border-white/10">
-                  {(['1k', '2k', '4k', '6k', '8k'] as const).map(res => (
-                    <button
-                      key={res}
-                      onClick={() => setExportResolution(res)}
-                      className={`px-2.5 py-1.5 text-[10px] font-black tracking-wider rounded-md transition-all uppercase ${
-                        exportResolution === res
-                          ? 'bg-white text-black'
-                          : 'text-muted-foreground hover:text-white'
-                      }`}
-                    >
-                      {res}
-                    </button>
-                  ))}
-                </div>
-                {/* DPI input */}
-                <div className="flex items-center gap-2 bg-white/5 border border-white/10 rounded-lg px-3 py-1.5">
-                  <span className="text-[10px] font-bold tracking-wider text-muted-foreground uppercase">DPI</span>
-                  <input
-                    type="number"
-                    min={72}
-                    max={600}
-                    step={1}
-                    value={exportDpi}
-                    onChange={e => setExportDpi(Math.max(72, Math.min(600, Number(e.target.value))))}
-                    className="w-14 bg-transparent text-[11px] font-mono text-white text-center outline-none"
-                  />
-                </div>
-              </div>
-              {/* Buttons */}
-              <div className="flex items-center justify-end gap-3 px-4 sm:px-6 pb-3 sm:pb-4">
+            <div className="border-t border-white/5 p-4 sm:p-6" style={{ paddingBottom: 'max(1.5rem, env(safe-area-inset-bottom))' }}>
+              <div className="flex flex-col sm:flex-row items-center gap-3 w-full">
                 <button
                   onClick={() => setPreviewDataUrl(null)}
-                  className="px-4 sm:px-5 py-2.5 text-xs font-bold tracking-wider rounded-lg border border-white/10 hover:bg-white/5 text-muted-foreground transition-colors uppercase"
+                  className="w-full sm:flex-1 py-3.5 text-xs font-bold tracking-wider rounded-xl border border-white/10 hover:bg-white/5 text-muted-foreground transition-all uppercase"
                 >
                   Cancel
                 </button>
@@ -2089,10 +2269,10 @@ const MapPoster = () => {
                     link.href = previewDataUrl!;
                     link.click();
                   }}
-                  className="flex items-center gap-2 px-5 sm:px-6 py-2.5 bg-white hover:bg-gray-100 rounded-lg text-black font-black tracking-[0.15em] text-xs shadow-lg transition-all hover:scale-105 active:scale-95"
+                  className="w-full sm:flex-1 flex items-center justify-center gap-2 py-3.5 bg-white hover:bg-gray-100 rounded-xl text-black font-black tracking-[0.15em] text-xs shadow-xl transition-all hover:scale-[1.02] active:scale-[0.98]"
                 >
                   <Download className="w-4 h-4" />
-                  DOWNLOAD
+                  DOWNLOAD POSTER
                 </button>
               </div>
             </div>
