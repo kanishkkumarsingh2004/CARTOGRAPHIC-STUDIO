@@ -16,7 +16,7 @@
 
 ## ✨ Key Highlights
 
-- **🎨 300+ Professional Themes**: A massive collection of curated palettes, from *Midnight Blue* luxury atlas aesthetics to *Neon City* cyberpunk vibes.
+- **🎨 100 Professional Themes**: A massive collection of curated palettes, from *Midnight Blue* luxury atlas aesthetics to *Neon City* cyberpunk vibes.
 - **🖼️ High-Resolution Export Engine**: Support for up to **8K resolution** exports with embedded **DPI metadata** (300 DPI) for print-ready perfection.
 - **📐 Precise Layout Control**: Over 50+ predefined layouts including ISO A-series (A0-A6), US Paper, Social Media formats (Instagram, Reels, X), and Digital Screen sizes (4K, Ultrawide, Mobile).
 - **🔬 Advanced Map Engine**: Powered by **OpenFreeMap** planet vector tiles with custom "Over-Zoom" rendering logic that captures 5.5x more detail than standard web maps.

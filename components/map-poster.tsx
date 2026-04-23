@@ -325,6 +325,46 @@ const MapPoster = () => {
     { id: 'sakura-night', name: 'SAKURA NIGHT', description: 'Nighttime Tokyo with soft pink and indigo accents', colors: ['#1e1b4b', '#17171e', '#fda4af', '#312e81', '#f43f5e'] },
     { id: 'forest-trail', name: 'FOREST TRAIL', description: 'Deep woodland greens with natural soil-colored roads', colors: ['#065f46', '#1e3a8a', '#ffffff', '#064e3b', '#451a03'] },
     { id: 'titanium', name: 'TITANIUM', description: 'Sleek metallic grays with high-visibility black roads', colors: ['#52525b', '#3f3f46', '#ffffff', '#71717a', '#000000'] },
+    { id: 'tundra-frost', name: 'TUNDRA FROST', description: 'Muted arctic blues with frost-white infrastructure', colors: ['#e2e8f0', '#cbd5e1', '#0f172a', '#94a3b8', '#64748b'] },
+    { id: 'cyberpunk-red', name: 'CYBER RED', description: 'High-octane dark with aggressive red and orange neon', colors: ['#050505', '#000000', '#ff0000', '#7a0000', '#ff4d00'] },
+    { id: 'deep-moss', name: 'DEEP MOSS', description: 'Extremely dark evergreen with vibrant moss accents', colors: ['#022c22', '#064e3b', '#4ade80', '#065f46', '#22c55e'] },
+    { id: 'sandstone-heat', name: 'SANDSTONE', description: 'Warm desert rock with scorched mapping details', colors: ['#e7d5c0', '#d4b499', '#7c2d12', '#a8a29e', '#92400e'] },
+    { id: 'electric-violet', name: 'ELECTRIC VIOLET', description: 'Deep space purple with hyper-violet infrastructure', colors: ['#1e1b4b', '#0f172a', '#c084fc', '#312e81', '#a855f7'] },
+    { id: 'slate-gold-pro', name: 'SLATE & GOLD', description: 'Sophisticated professional slate with luxury gold', colors: ['#1e293b', '#0f172a', '#eab308', '#334155', '#d97706'] },
+    { id: 'forest-fog', name: 'FOREST FOG', description: 'Mist-covered woodlands with pale minimal details', colors: ['#f1f5f9', '#e2e8f0', '#166534', '#94a3b8', '#14532d'] },
+    { id: 'midnight-sun', name: 'MIDNIGHT SUN', description: 'Dark polar blue with warm solar orange highlights', colors: ['#0c1a2c', '#060d16', '#fb923c', '#1e3a5f', '#f97316'] },
+    { id: 'rose-quartz', name: 'ROSE QUARTZ', description: 'Elegant crystalline pinks with soft white roads', colors: ['#fff1f2', '#ffe4e6', '#be185d', '#fda4af', '#fb7185'] },
+    { id: 'ocean-deep-pro', name: 'OCEAN DEEP', description: 'The absolute depths of the sea in monochromatic blue', colors: ['#020617', '#000000', '#3b82f6', '#1e3a8a', '#1d4ed8'] },
+    { id: 'terracotta-night-alt', name: 'TERRACOTTA NIGHT', description: 'Midnight base with warm clay and brick infrastructure', colors: ['#0c0a09', '#000000', '#d97706', '#44403c', '#b45309'] },
+    { id: 'industrial-zinc', name: 'INDUSTRIAL ZINC', description: 'Raw metallic grays and cold structural tones', colors: ['#3f3f46', '#27272a', '#fafafa', '#52525b', '#e4e4e7'] },
+    { id: 'polar-night-white', name: 'POLAR NIGHT', description: 'Deepest arctic blue with shimmering snow-white', colors: ['#020617', '#000000', '#f8fafc', '#1e293b', '#e2e8f0'] },
+    { id: 'rustic-autumn-brown', name: 'RUSTIC AUTUMN', description: 'Harvest season browns and deep forest oranges', colors: ['#451a03', '#2b1002', '#fcd34d', '#78350f', '#d97706'] },
+    { id: 'digital-sea-cyan', name: 'DIGITAL SEA', description: 'Pure data blue with vibrant cyan network paths', colors: ['#083344', '#0c4a6e', '#22d3ee', '#155e75', '#06b6d4'] },
+    { id: 'golden-hour-warm', name: 'GOLDEN HOUR', description: 'Soft twilight yellows and long-shadow oranges', colors: ['#fef3c7', '#fde68a', '#d97706', '#fbbf24', '#f59e0b'] },
+    { id: 'concrete-jungle-urban', name: 'CONCRETE JUNGLE', description: 'Urban gray slabs with vibrant rooftop greenery', colors: ['#d4d4d8', '#a1a1aa', '#166534', '#52525b', '#22c55e'] },
+    { id: 'icy-peak-blue', name: 'ICY PEAK', description: 'Sharp mountain whites with crystalline blue shadows', colors: ['#f0f9ff', '#e0f2fe', '#0369a1', '#7dd3fc', '#0ea5e9'] },
+    { id: 'obsidian-teal-glow', name: 'OBSIDIAN TEAL', description: 'Glassy black with deep underwater teal glow', colors: ['#020617', '#000000', '#2dd4bf', '#134e4a', '#14b8a6'] },
+    { id: 'berry-sorbet-pink', name: 'BERRY SORBET', description: 'Rich fruit tones with vibrant berry infrastructure', colors: ['#4c0519', '#2d000d', '#f472b6', '#881337', '#db2777'] },
+    { id: 'ancient-stone-gray', name: 'ANCIENT STONE', description: 'Weathered historical beige with dark monument gray', colors: ['#fafaf9', '#f5f5f4', '#44403c', '#d6d3d1', '#78716c'] },
+    { id: 'neon-mint-dark-pro', name: 'NEON MINT', description: 'Industrial dark with biological neon mint paths', colors: ['#09090b', '#000000', '#4ade80', '#27272a', '#22c55e'] },
+    { id: 'skyline-glow-dusk', name: 'SKYLINE GLOW', description: 'Vibrant city lights at dusk with purple-blue base', colors: ['#1e1b4b', '#312e81', '#fbbf24', '#4338ca', '#f59e0b'] },
+    { id: 'deep-amethyst-purple', name: 'DEEP AMETHYST', description: 'Gothic purple spectrum with crystalline highlights', colors: ['#2e1065', '#1e1b4b', '#e9d5ff', '#4c1d95', '#a855f7'] },
+    { id: 'carbon-pro-woven', name: 'CARBON PRO', description: 'Professional technical black with woven gray details', colors: ['#0a0a0a', '#000000', '#d4d4d8', '#1a1a1a', '#52525b'] },
+    { id: 'sunset-ridge-red', name: 'SUNSET RIDGE', description: 'High-altitude mountain ridge at final sunset', colors: ['#450a0a', '#2d0606', '#fdba74', '#7f1d1d', '#f97316'] },
+    { id: 'arctic-bloom-ice', name: 'ARCTIC BLOOM', description: 'Frozen ice landscape with emerging floral pinks', colors: ['#f8fafc', '#f1f5f9', '#f472b6', '#cbd5e1', '#ec4899'] },
+    { id: 'dark-matter-void', name: 'DARK MATTER', description: 'Infinite void black with deep theoretical blue', colors: ['#020617', '#000000', '#3b82f6', '#0f172a', '#2563eb'] },
+    { id: 'golden-gate-orange', name: 'GOLDEN GATE', description: 'San Francisco fog gray with international orange', colors: ['#f3f4f6', '#e5e7eb', '#ea580c', '#9ca3af', '#c2410c'] },
+    { id: 'mystic-forest-magic', name: 'MYSTIC FOREST', description: 'Ancient magical woods with deep purple shadows', colors: ['#064e3b', '#022c22', '#c084fc', '#065f46', '#a855f7'] },
+    { id: 'steel-blue-metallic', name: 'STEEL BLUE', description: 'Heavy industrial steel with blueprint blue accents', colors: ['#1e3a8a', '#172554', '#cbd5e1', '#1e40af', '#94a3b8'] },
+    { id: 'peach-fuzz-soft', name: 'PEACH FUZZ', description: 'Soft velvet peach with clean porcelain roads', colors: ['#fff7ed', '#ffedd5', '#ea580c', '#fed7aa', '#f97316'] },
+    { id: 'empire-state-gold', name: 'EMPIRE STATE', description: '1930s architectural gold and limestone gray', colors: ['#44403c', '#292524', '#fcd34d', '#78716c', '#fbbf24'] },
+    { id: 'midnight-galaxy-indigo', name: 'MIDNIGHT GALAXY', description: 'Deep space indigo with starlight violet paths', colors: ['#0f172a', '#020617', '#a78bfa', '#1e293b', '#8b5cf6'] },
+    { id: 'sage-brush-dusty', name: 'SAGE BRUSH', description: 'High-desert green with dusty overland trails', colors: ['#f0fdf4', '#dcfce7', '#166534', '#bbf7d0', '#15803d'] },
+    { id: 'cyberpunk-green-toxic-alt', name: 'CYBER GREEN', description: 'Warning-level toxic green on industrial dark', colors: ['#050505', '#000000', '#4ade80', '#1a1a1a', '#22c55e'] },
+    { id: 'royal-velvet-aristocrat', name: 'ROYAL VELVET', description: 'Deep aristocratic blue with crimson road details', colors: ['#1e3a8a', '#172554', '#ef4444', '#1e40af', '#dc2626'] },
+    { id: 'dusty-rose-muted', name: 'DUSTY ROSE', description: 'Muted historical pink with soft lead infrastructure', colors: ['#f5f5f4', '#e7e5e4', '#be185d', '#d6d3d1', '#9d174d'] },
+    { id: 'copper-mine-earth', name: 'COPPER GLOW', description: 'Deep earth browns with shimmering copper trails', colors: ['#1c1917', '#0c0a09', '#fb923c', '#44403c', '#ea580c'] },
+    { id: 'infinite-horizon-pro', name: 'INFINITE SKY', description: 'Pure upper-atmosphere blues with cloud-white', colors: ['#f0f9ff', '#e0f2fe', '#0284c7', '#bae6fd', '#0369a1'] },
   ];
 
   const colorLabels = [
@@ -1426,6 +1466,43 @@ const MapPoster = () => {
                         type="text"
                         value={locCountry}
                         onChange={(e) => { setIsTextManual(true); setLocCountry(e.target.value.toUpperCase()); }}
+                        className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2.5 text-sm text-white placeholder-muted-foreground focus:border-primary/50 focus:outline-none transition-colors"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-xs font-medium text-muted-foreground mb-2 block">Latitude</label>
+                      <input
+                        type="number"
+                        step="0.0001"
+                        min="-90"
+                        max="90"
+                        value={mapCenter[1].toFixed(4)}
+                        onChange={(e) => {
+                          const lat = parseFloat(e.target.value);
+                          if (!Number.isNaN(lat)) {
+                            setMapCenter([mapCenter[0], lat]);
+                          }
+                        }}
+                        className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2.5 text-sm text-white placeholder-muted-foreground focus:border-primary/50 focus:outline-none transition-colors"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium text-muted-foreground mb-2 block">Longitude</label>
+                      <input
+                        type="number"
+                        step="0.0001"
+                        min="-180"
+                        max="180"
+                        value={mapCenter[0].toFixed(4)}
+                        onChange={(e) => {
+                          const lon = parseFloat(e.target.value);
+                          if (!Number.isNaN(lon)) {
+                            setMapCenter([lon, mapCenter[1]]);
+                          }
+                        }}
                         className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2.5 text-sm text-white placeholder-muted-foreground focus:border-primary/50 focus:outline-none transition-colors"
                       />
                     </div>
